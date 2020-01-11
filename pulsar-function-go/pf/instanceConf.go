@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/apache/pulsar/pulsar-function-go/conf"
-	"github.com/apache/pulsar/pulsar-function-go/pb"
+	pb "github.com/apache/pulsar/pulsar-function-go/pb"
 )
 
 // This is the config passed to the Golang Instance. Contains all the information
@@ -39,6 +39,7 @@ type instanceConf struct {
 	clusterName      string
 	pulsarServiceURL string
 	killAfterIdleMs  time.Duration
+	expectedHealthCheckInterval int32
 }
 
 func newInstanceConf() *instanceConf {
@@ -56,6 +57,7 @@ func newInstanceConf() *instanceConf {
 		clusterName:      cfg.ClusterName,
 		pulsarServiceURL: cfg.PulsarServiceURL,
 		killAfterIdleMs:  cfg.KillAfterIdleMs,
+		expectedHealthCheckInterval: cfg.ExpectedHealthCheckInterval,
 		funcDetails: pb.FunctionDetails{
 			Tenant:               cfg.Tenant,
 			Namespace:            cfg.NameSpace,
