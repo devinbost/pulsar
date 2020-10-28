@@ -181,6 +181,7 @@ flexible messaging model and an intuitive client API.</description>
     <javax.activation.version>1.2.0</javax.activation.version>
     <jna.version>4.2.0</jna.version>
     <kubernetesclient.version>9.0.2</kubernetesclient.version>
+    <jetcd.version>0.5.4</jetcd.version>
 
     <!-- test dependencies -->
     <cassandra.version>3.6.0</cassandra.version>
@@ -973,6 +974,17 @@ flexible messaging model and an intuitive client API.</description>
         <groupId>org.objenesis</groupId>
         <artifactId>objenesis</artifactId>
         <version>${objenesis.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.f</groupId>
+        <artifactId>jetcd-core</artifactId>
+        <version>${jetcd.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.ibm.etcd</groupId>
+        <artifactId>etcd-java</artifactId>
+        <version>0.0.17</version>
       </dependency>
     
     </dependencies>

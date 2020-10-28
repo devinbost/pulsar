@@ -39,4 +39,16 @@ public class MetadataStoreConfig {
      */
     @Builder.Default
     private final boolean allowReadOnlyOperations = false;
+
+    /**
+     * Specify which metastore backend is desired. e.g. zookeeper or etcd
+     */
+    @Builder.Default
+    private final String metastoreBackend = "zookeeper";
+
+    /**
+     * Specify the connection string for the metastore backend.
+     */
+    @Builder.Default
+    private final String metastoreConnectionString = "localhost:1234";
 }

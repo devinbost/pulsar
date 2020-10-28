@@ -22,6 +22,7 @@ import java.io.IOException;
 
 import lombok.experimental.UtilityClass;
 
+import org.apache.pulsar.metadata.impl.etcd.EtcdMetadataStore;
 import org.apache.pulsar.metadata.impl.zookeeper.ZKMetadataStore;
 
 /**
@@ -41,6 +42,14 @@ public class MetadataStoreFactory {
      *             if the metadata store initialization fails
      */
     public static MetadataStore create(String metadataURL, MetadataStoreConfig metadataStoreConfig) throws IOException {
-        return new ZKMetadataStore(metadataURL, metadataStoreConfig);
+        switch(metadataStoreConfig.getMetastoreBackend()){
+            case "zookeeper":
+                return new ZKMetadataStore(metadataURL, metadataStoreConfig);
+            case "etcd":
+                return new EtcdMetadataStore(metadataURL, metadataStoreConfig);
+            default:
+                return new ZKMetadataStore(metadataURL, metadataStoreConfig);
+        }
+
     }
 }

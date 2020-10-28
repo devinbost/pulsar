@@ -47,5 +47,14 @@
       <groupId>com.github.ben-manes.caffeine</groupId>
       <artifactId>caffeine</artifactId>
     </dependency>
+
+    <dependency>
+      <groupId>io.etcd</groupId>
+      <artifactId>jetcd-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ibm.etcd</groupId>
+      <artifactId>etcd-java</artifactId>
+    </dependency>
   </dependencies>
 </project>
