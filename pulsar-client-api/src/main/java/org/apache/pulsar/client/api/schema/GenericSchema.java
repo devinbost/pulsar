@@ -20,11 +20,12 @@ package org.apache.pulsar.client.api.schema;
 
 import java.util.List;
 import org.apache.pulsar.client.api.Schema;
+import org.apache.pulsar.common.schema.SchemaInfo;
 
 /**
  * A schema that serializes and deserializes between {@link GenericRecord} and bytes.
  */
-public interface GenericSchema extends Schema<GenericRecord> {
+public interface GenericSchema<T extends GenericRecord> extends Schema<T> {
 
     /**
      * Returns the list of fields.
@@ -39,5 +40,17 @@ public interface GenericSchema extends Schema<GenericRecord> {
      * @return generic record builder
      */
     GenericRecordBuilder newRecordBuilder();
+
+
+    static GenericSchema of(SchemaInfo schemaInfo) {
+        throw new RuntimeException("GenericSchema interface implementation class must rewrite this method !");
+    }
+
+    static GenericSchema of(SchemaInfo schemaInfo,
+                            boolean useProvidedSchemaAsReaderSchema) {
+        throw new RuntimeException("GenericSchema interface implementation class must rewrite this method !");
+    }
+
+
 
 }

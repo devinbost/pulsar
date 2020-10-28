@@ -18,6 +18,8 @@
  */
 #include <lib/ConsumerConfigurationImpl.h>
 
+#include <stdexcept>
+
 namespace pulsar {
 
 const static std::string emptyString;
@@ -31,6 +33,12 @@ ConsumerConfiguration::ConsumerConfiguration(const ConsumerConfiguration& x) : i
 ConsumerConfiguration& ConsumerConfiguration::operator=(const ConsumerConfiguration& x) {
     impl_ = x.impl_;
     return *this;
+}
+
+ConsumerConfiguration ConsumerConfiguration::clone() const {
+    ConsumerConfiguration newConf;
+    newConf.impl_.reset(new ConsumerConfigurationImpl(*this->impl_));
+    return newConf;
 }
 
 ConsumerConfiguration& ConsumerConfiguration::setSchema(const SchemaInfo& schemaInfo) {
@@ -86,19 +94,38 @@ void ConsumerConfiguration::setConsumerName(const std::string& consumerName) {
 long ConsumerConfiguration::getUnAckedMessagesTimeoutMs() const { return impl_->unAckedMessagesTimeoutMs; }
 
 void ConsumerConfiguration::setUnAckedMessagesTimeoutMs(const uint64_t milliSeconds) {
-    if (milliSeconds < 10000) {
-        throw "Consumer Config Exception: Unacknowledged message timeout should be greater than 10 seconds.";
+    if (milliSeconds < 10000 && milliSeconds != 0) {
+        throw std::invalid_argument(
+            "Consumer Config Exception: Unacknowledged message timeout should be greater than 10 seconds.");
     }
     impl_->unAckedMessagesTimeoutMs = milliSeconds;
 }
 
+long ConsumerConfiguration::getTickDurationInMs() const { return impl_->tickDurationInMs; }
+
+void ConsumerConfiguration::setTickDurationInMs(const uint64_t milliSeconds) {
+    impl_->tickDurationInMs = milliSeconds;
+}
+
 void ConsumerConfiguration::setNegativeAckRedeliveryDelayMs(long redeliveryDelayMillis) {
-    impl_->negativeAckRedeliveryDelay = std::chrono::milliseconds(redeliveryDelayMillis);
+    impl_->negativeAckRedeliveryDelayMs = redeliveryDelayMillis;
 }
 
 long ConsumerConfiguration::getNegativeAckRedeliveryDelayMs() const {
-    return impl_->negativeAckRedeliveryDelay.count();
+    return impl_->negativeAckRedeliveryDelayMs;
 }
+
+void ConsumerConfiguration::setAckGroupingTimeMs(long ackGroupingMillis) {
+    impl_->ackGroupingTimeMs = ackGroupingMillis;
+}
+
+long ConsumerConfiguration::getAckGroupingTimeMs() const { return impl_->ackGroupingTimeMs; }
+
+void ConsumerConfiguration::setAckGroupingMaxSize(long maxGroupingSize) {
+    impl_->ackGroupingMaxSize = maxGroupingSize;
+}
+
+long ConsumerConfiguration::getAckGroupingMaxSize() const { return impl_->ackGroupingMaxSize; }
 
 bool ConsumerConfiguration::isEncryptionEnabled() const { return (impl_->cryptoKeyReader != NULL); }
 

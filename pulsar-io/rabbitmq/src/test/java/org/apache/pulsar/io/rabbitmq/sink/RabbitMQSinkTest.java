@@ -26,6 +26,7 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -52,7 +53,6 @@ public class RabbitMQSinkTest {
         configs.put("virtualHost", "default");
         configs.put("username", "guest");
         configs.put("password", "guest");
-        configs.put("queueName", "test-queue");
         configs.put("connectionName", "test-connection");
         configs.put("requestedChannelMax", "0");
         configs.put("requestedFrameMax", "0");
@@ -60,7 +60,7 @@ public class RabbitMQSinkTest {
         configs.put("handshakeTimeout", "10000");
         configs.put("requestedHeartbeat", "60");
         configs.put("exchangeName", "test-exchange");
-        configs.put("routingKey", "test-key");
+        configs.put("exchangeType", "fanout");
 
         RabbitMQSink sink = new RabbitMQSink();
 
@@ -68,23 +68,23 @@ public class RabbitMQSinkTest {
         sink.open(configs, null);
 
         // write should success
-        Record<String> record = build("test-topic", "fakeKey", "fakeValue");
+        Record<byte[]> record = build("test-topic", "fakeKey", "fakeValue", "fakeRoutingKey");
         sink.write(record);
 
         sink.close();
     }
 
-    private Record<String> build(String topic, String key, String value) {
+    private Record<byte[]> build(String topic, String key, String value, String routingKey) {
         // prepare a SinkRecord
-        SinkRecord<String> record = new SinkRecord<>(new Record<String>() {
+        SinkRecord<byte[]> record = new SinkRecord<>(new Record<byte[]>() {
             @Override
             public Optional<String> getKey() {
                 return Optional.empty();
             }
 
             @Override
-            public String getValue() {
-                return key;
+            public byte[] getValue() {
+                return value.getBytes(StandardCharsets.UTF_8);
             }
 
             @Override
@@ -95,7 +95,16 @@ public class RabbitMQSinkTest {
                     return Optional.empty();
                 }
             }
-        }, value);
+
+            @Override
+            public Map<String, String> getProperties() {
+                return new HashMap<String, String>() {
+                    {
+                        put("routingKey", routingKey);
+                    }
+                };
+            }
+        }, value.getBytes(StandardCharsets.UTF_8));
         return record;
     }
 }

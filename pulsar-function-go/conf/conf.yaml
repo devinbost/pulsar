@@ -29,12 +29,13 @@ killAfterIdleMs: 50000
 tenant: ""
 nameSpace: ""
 name: "go-function"
-logTopic: ""
+logTopic: "log-topic"
 processingGuarantees: 0
 secretsMap: ""
 runtime: 0
 autoAck: true
 parallelism: 0
+userConfig: '{"word-of-the-day": "hapax legomenon"}'
 # source config
 subscriptionType: 0
 timeoutMs: 0
@@ -55,3 +56,4 @@ disk: 0
 # retryDetails config
 maxMessageRetries: 0
 deadLetterTopic: ""
+expectedHealthCheckInterval: 3

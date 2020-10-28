@@ -27,11 +27,11 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
@@ -42,27 +42,35 @@ import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 
+import com.google.common.base.Joiner;
+import com.google.common.base.Splitter;
+import com.google.common.collect.BoundType;
+import com.google.common.collect.Range;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.broker.PulsarService;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.admin.AdminResource;
 import org.apache.pulsar.broker.authentication.AuthenticationDataHttps;
 import org.apache.pulsar.broker.authentication.AuthenticationDataSource;
+import org.apache.pulsar.broker.authorization.AuthorizationService;
+import org.apache.pulsar.broker.namespace.LookupOptions;
 import org.apache.pulsar.broker.namespace.NamespaceService;
-import org.apache.pulsar.common.naming.*;
+import org.apache.pulsar.common.naming.Constants;
+import org.apache.pulsar.common.naming.NamespaceBundle;
+import org.apache.pulsar.common.naming.NamespaceBundles;
+import org.apache.pulsar.common.naming.NamespaceName;
+import org.apache.pulsar.common.naming.TopicName;
 import org.apache.pulsar.common.policies.data.BundlesData;
 import org.apache.pulsar.common.policies.data.ClusterData;
+import org.apache.pulsar.common.policies.data.NamespaceOperation;
 import org.apache.pulsar.common.policies.data.Policies;
+import org.apache.pulsar.common.policies.data.PolicyName;
+import org.apache.pulsar.common.policies.data.PolicyOperation;
 import org.apache.pulsar.common.policies.data.TenantInfo;
+import org.apache.pulsar.common.policies.data.TenantOperation;
 import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.base.Joiner;
-import com.google.common.base.Splitter;
-import com.google.common.collect.BoundType;
-import com.google.common.collect.Range;
-import com.google.common.collect.Sets;
 
 /**
  * Base class for Web resources in Pulsar. It provides basic authorization functions.
@@ -112,7 +120,7 @@ public abstract class PulsarWebResource {
     public static String splitPath(String source, int slice) {
         Iterable<String> parts = Splitter.on('/').limit(slice).split(source);
         Iterator<String> s = parts.iterator();
-        String result = new String();
+        String result = "";
         for (int i = 0; i < slice; i++) {
             result = s.next();
         }
@@ -159,6 +167,15 @@ public abstract class PulsarWebResource {
         }
     }
 
+    protected boolean hasSuperUserAccess() {
+        try {
+            validateSuperUserAccess();
+        } catch (Exception e) {
+            return false;
+        }
+        return true;
+    }
+
     /**
      * Checks whether the user has Pulsar Super-User access to the system.
      *
@@ -166,10 +183,7 @@ public abstract class PulsarWebResource {
      *             if not authorized
      */
     protected void validateSuperUserAccess() {
-        // TODO: isSaslAuthentication used to bypass web resource check.
-        //  will remove it after implementation the support.
-        //  github issue #3653 {@link: https://github.com/apache/pulsar/issues/3653}
-        if (config().isAuthenticationEnabled() && !config().isSaslAuthentication()) {
+        if (config().isAuthenticationEnabled()) {
             String appId = clientAppId();
             if(log.isDebugEnabled()) {
                 log.debug("[{}] Check super user access: Authenticated: {} -- Role: {}", uri.getRequestUri(),
@@ -186,11 +200,11 @@ public abstract class PulsarWebResource {
                 try {
                     proxyAuthorizedFuture = pulsar.getBrokerService()
                             .getAuthorizationService()
-                            .isSuperUser(appId);
+                            .isSuperUser(appId, clientAuthData());
 
                     originalPrincipalAuthorizedFuture = pulsar.getBrokerService()
                             .getAuthorizationService()
-                            .isSuperUser(originalPrincipal);
+                            .isSuperUser(originalPrincipal, clientAuthData());
 
                     if (!proxyAuthorizedFuture.get() || !originalPrincipalAuthorizedFuture.get()) {
                         throw new RestException(Status.UNAUTHORIZED,
@@ -198,12 +212,20 @@ public abstract class PulsarWebResource {
                                               appId, originalPrincipal));
                     }
                 } catch (InterruptedException | ExecutionException e) {
+                    log.error("Error validating super-user access : "+ e.getMessage(), e);
                     throw new RestException(Status.INTERNAL_SERVER_ERROR, e.getMessage());
                 }
                 log.debug("Successfully authorized {} (proxied by {}) as super-user",
                           originalPrincipal, appId);
-            } else if (!config().getSuperUserRoles().contains(appId)) {
-                throw new RestException(Status.UNAUTHORIZED, "This operation requires super-user access");
+            } else {
+                if (config().isAuthorizationEnabled() && !pulsar.getBrokerService()
+                        .getAuthorizationService()
+                        .isSuperUser(appId, clientAuthData())
+                        .join()) {
+                    throw new RestException(Status.UNAUTHORIZED, "This operation requires super-user access");
+                }
+                log.debug("Successfully authorized {} as super-user",
+                          appId);
             }
         }
     }
@@ -218,7 +240,7 @@ public abstract class PulsarWebResource {
      */
     protected void validateAdminAccessForTenant(String tenant) {
         try {
-            validateAdminAccessForTenant(pulsar(), clientAppId(), originalPrincipal(), tenant);
+            validateAdminAccessForTenant(pulsar(), clientAppId(), originalPrincipal(), tenant, clientAuthData());
         } catch (RestException e) {
             throw e;
         } catch (Exception e) {
@@ -228,7 +250,8 @@ public abstract class PulsarWebResource {
     }
 
     protected static void validateAdminAccessForTenant(PulsarService pulsar, String clientAppId,
-                                                       String originalPrincipal, String tenant)
+                                                       String originalPrincipal, String tenant,
+                                                       AuthenticationDataSource authenticationData)
             throws RestException, Exception {
         if (log.isDebugEnabled()) {
             log.debug("check admin access on tenant: {} - Authenticated: {} -- role: {}", tenant,
@@ -245,7 +268,7 @@ public abstract class PulsarWebResource {
             throw new RestException(Status.NOT_FOUND, "Tenant does not exist");
         }
 
-        if (pulsar.getConfiguration().isAuthenticationEnabled() && !pulsar.getConfiguration().isSaslAuthentication() && pulsar.getConfiguration().isAuthorizationEnabled()) {
+        if (pulsar.getConfiguration().isAuthenticationEnabled() && pulsar.getConfiguration().isAuthorizationEnabled()) {
             if (!isClientAuthenticated(clientAppId)) {
                 throw new RestException(Status.FORBIDDEN, "Need to authenticate to perform the request");
             }
@@ -253,22 +276,17 @@ public abstract class PulsarWebResource {
             validateOriginalPrincipal(pulsar.getConfiguration().getProxyRoles(), clientAppId, originalPrincipal);
 
             if (pulsar.getConfiguration().getProxyRoles().contains(clientAppId)) {
-
                 CompletableFuture<Boolean> isProxySuperUserFuture;
                 CompletableFuture<Boolean> isOriginalPrincipalSuperUserFuture;
                 try {
-                    isProxySuperUserFuture = pulsar.getBrokerService()
-                            .getAuthorizationService()
-                            .isSuperUser(clientAppId);
+                    AuthorizationService authorizationService = pulsar.getBrokerService().getAuthorizationService();
+                    isProxySuperUserFuture = authorizationService.isSuperUser(clientAppId, authenticationData);
 
-                    isOriginalPrincipalSuperUserFuture = pulsar.getBrokerService()
-                            .getAuthorizationService()
-                            .isSuperUser(originalPrincipal);
+                    isOriginalPrincipalSuperUserFuture = authorizationService.isSuperUser(originalPrincipal, authenticationData);
 
-                Set<String> adminRoles = tenantInfo.getAdminRoles();
-                boolean proxyAuthorized = isProxySuperUserFuture.get() || adminRoles.contains(clientAppId);
-                boolean originalPrincipalAuthorized
-                    = isOriginalPrincipalSuperUserFuture.get() || adminRoles.contains(originalPrincipal);
+                    boolean proxyAuthorized = isProxySuperUserFuture.get() || authorizationService.isTenantAdmin(tenant, clientAppId, tenantInfo, authenticationData).get();
+                    boolean originalPrincipalAuthorized
+                    = isOriginalPrincipalSuperUserFuture.get() || authorizationService.isTenantAdmin(tenant, originalPrincipal, tenantInfo, authenticationData).get();
                     if (!proxyAuthorized || !originalPrincipalAuthorized) {
                         throw new RestException(Status.UNAUTHORIZED,
                                 String.format("Proxy not authorized to access resource (proxy:%s,original:%s)",
@@ -279,14 +297,15 @@ public abstract class PulsarWebResource {
                 }
                 log.debug("Successfully authorized {} (proxied by {}) on tenant {}",
                           originalPrincipal, clientAppId, tenant);
-            } else if (pulsar.getConfiguration().getSuperUserRoles().contains(clientAppId)) {
-                // Super-user has access to configure all the policies
-                log.debug("granting access to super-user {} on tenant {}", clientAppId, tenant);
             } else {
-
-                if (!tenantInfo.getAdminRoles().contains(clientAppId)) {
-                    throw new RestException(Status.UNAUTHORIZED,
-                            "Don't have permission to administrate resources on this tenant");
+                if (!pulsar.getBrokerService()
+                        .getAuthorizationService()
+                        .isSuperUser(clientAppId, authenticationData)
+                        .join()) {
+                    if (!pulsar.getBrokerService().getAuthorizationService().isTenantAdmin(tenant, clientAppId, tenantInfo, authenticationData).get()) {
+                        throw new RestException(Status.UNAUTHORIZED,
+                                "Don't have permission to administrate resources on this tenant");
+                    }
                 }
 
                 log.debug("Successfully authorized {} on tenant {}", clientAppId, tenant);
@@ -299,8 +318,11 @@ public abstract class PulsarWebResource {
         try {
             tenantInfo = pulsar().getConfigurationCache().propertiesCache().get(path(POLICIES, tenant))
                     .orElseThrow(() -> new RestException(Status.NOT_FOUND, "Tenant does not exist"));
+        } catch (RestException e) {
+            log.warn("Failed to get tenant admin data for tenant {}", tenant);
+            throw e;
         } catch (Exception e) {
-            log.error("Failed to get tenant admin data for tenant");
+            log.error("Failed to get tenant admin data for tenant {}", tenant, e);
             throw new RestException(e);
         }
 
@@ -330,7 +352,6 @@ public abstract class PulsarWebResource {
                 // redirect to the cluster requested
                 if (log.isDebugEnabled()) {
                     log.debug("[{}] Redirecting the rest call to {}: cluster={}", clientAppId(), redirect, cluster);
-
                 }
                 throw new WebApplicationException(Response.temporaryRedirect(redirect).build());
             }
@@ -412,10 +433,12 @@ public abstract class PulsarWebResource {
      * will throw an exception to redirect to assigned owner or leader; if authoritative is true then it will try to
      * acquire all the namespace bundles.
      *
-     * @param fqnn
-     * @param authoritative
-     * @param readOnly
-     * @param bundleData
+     * @param tenant tenant name
+     * @param cluster cluster name
+     * @param namespace namespace name
+     * @param authoritative if it is an authoritative request
+     * @param readOnly if the request is read-only
+     * @param bundleData bundle data
      */
     protected void validateNamespaceOwnershipWithBundles(String tenant, String cluster, String namespace,
             boolean authoritative, boolean readOnly, BundlesData bundleData) {
@@ -431,7 +454,7 @@ public abstract class PulsarWebResource {
             // propagate already wrapped-up WebApplicationExceptions
             throw wae;
         } catch (Exception oe) {
-            log.debug(String.format("Failed to find owner for namespace %s", fqnn), oe);
+            log.debug("Failed to find owner for namespace {}", fqnn, oe);
             throw new RestException(oe);
         }
     }
@@ -446,7 +469,7 @@ public abstract class PulsarWebResource {
             // propagate already wrapped-up WebApplicationExceptions
             throw wae;
         } catch (Exception oe) {
-            log.debug(String.format("Failed to find owner for namespace %s", fqnn), oe);
+            log.debug("Failed to find owner for namespace {}", fqnn, oe);
             throw new RestException(oe);
         }
     }
@@ -479,8 +502,14 @@ public abstract class PulsarWebResource {
             String bundleRange) {
         NamespaceBundle nsBundle = validateNamespaceBundleRange(fqnn, bundles, bundleRange);
         NamespaceService nsService = pulsar().getNamespaceService();
+
+        LookupOptions options = LookupOptions.builder()
+                .authoritative(false)
+                .requestHttps(isRequestHttps())
+                .readOnly(true)
+                .loadTopicsInBundle(false).build();
         try {
-            return nsService.getWebServiceUrl(nsBundle, /*authoritative */ false, isRequestHttps(), /* read-only */ true).isPresent();
+            return nsService.getWebServiceUrl(nsBundle, options).isPresent();
         } catch (Exception e) {
             log.error("[{}] Failed to check whether namespace bundle is owned {}/{}", clientAppId(), fqnn.toString(), bundleRange, e);
             throw new RestException(e);
@@ -516,7 +545,12 @@ public abstract class PulsarWebResource {
             // - If authoritative is false and this broker is not leader, forward to leader
             // - If authoritative is false and this broker is leader, determine owner and forward w/ authoritative=true
             // - If authoritative is true, own the namespace and continue
-            Optional<URL> webUrl = nsService.getWebServiceUrl(bundle, authoritative, isRequestHttps(), readOnly);
+            LookupOptions options = LookupOptions.builder()
+                    .authoritative(authoritative)
+                    .requestHttps(isRequestHttps())
+                    .readOnly(readOnly)
+                    .loadTopicsInBundle(false).build();
+            Optional<URL> webUrl = nsService.getWebServiceUrl(bundle, options);
             // Ensure we get a url
             if (webUrl == null || !webUrl.isPresent()) {
                 log.warn("Unable to get web service url");
@@ -536,13 +570,17 @@ public abstract class PulsarWebResource {
                 log.debug("Redirecting the rest call to {}", redirect);
                 throw new WebApplicationException(Response.temporaryRedirect(redirect).build());
             }
+        } catch (TimeoutException te) {
+            String msg = String.format("Finding owner for ServiceUnit %s timed out", bundle);
+            log.error(msg, te);
+            throw new RestException(Status.INTERNAL_SERVER_ERROR, msg);
         } catch (IllegalArgumentException iae) {
             // namespace format is not valid
-            log.debug(String.format("Failed to find owner for ServiceUnit %s", bundle), iae);
+            log.debug("Failed to find owner for ServiceUnit {}", bundle, iae);
             throw new RestException(Status.PRECONDITION_FAILED,
                     "ServiceUnit format is not expected. ServiceUnit " + bundle);
         } catch (IllegalStateException ise) {
-            log.debug(String.format("Failed to find owner for ServiceUnit %s", bundle), ise);
+            log.debug("Failed to find owner for ServiceUnit {}", bundle, ise);
             throw new RestException(Status.PRECONDITION_FAILED, "ServiceUnit bundle is actived. ServiceUnit " + bundle);
         } catch (NullPointerException e) {
             log.warn("Unable to get web service url");
@@ -557,18 +595,20 @@ public abstract class PulsarWebResource {
      * client to the appropriate broker. If no broker owns the namespace yet, this function will try to acquire the
      * ownership by default.
      *
+     * @param topicName topic name
      * @param authoritative
-     *
-     * @param tenant
-     * @param cluster
-     * @param namespace
      */
     protected void validateTopicOwnership(TopicName topicName, boolean authoritative) {
         NamespaceService nsService = pulsar().getNamespaceService();
 
         try {
             // per function name, this is trying to acquire the whole namespace ownership
-            Optional<URL> webUrl = nsService.getWebServiceUrl(topicName, authoritative, isRequestHttps(), false);
+            LookupOptions options = LookupOptions.builder()
+                    .authoritative(authoritative)
+                    .requestHttps(isRequestHttps())
+                    .readOnly(false)
+                    .loadTopicsInBundle(false).build();
+            Optional<URL> webUrl = nsService.getWebServiceUrl(topicName, options);
             // Ensure we get a url
             if (webUrl == null || !webUrl.isPresent()) {
                 log.info("Unable to get web service url");
@@ -584,17 +624,21 @@ public abstract class PulsarWebResource {
                 log.debug("Redirecting the rest call to {}", redirect);
                 throw new WebApplicationException(Response.temporaryRedirect(redirect).build());
             }
+        } catch (TimeoutException te) {
+            String msg = String.format("Finding owner for topic %s timed out", topicName);
+            log.error(msg, te);
+            throw new RestException(Status.INTERNAL_SERVER_ERROR, msg);
         } catch (IllegalArgumentException iae) {
             // namespace format is not valid
-            log.debug(String.format("Failed to find owner for topic :%s", topicName), iae);
+            log.debug("Failed to find owner for topic: {}", topicName, iae);
             throw new RestException(Status.PRECONDITION_FAILED, "Can't find owner for topic " + topicName);
         } catch (IllegalStateException ise) {
-            log.debug(String.format("Failed to find owner for topic:%s", topicName), ise);
+            log.debug("Failed to find owner for topic: {}", topicName, ise);
             throw new RestException(Status.PRECONDITION_FAILED, "Can't find owner for topic " + topicName);
         } catch (WebApplicationException wae) {
             throw wae;
         } catch (Exception oe) {
-            log.debug(String.format("Failed to find owner for topic:%s", topicName), oe);
+            log.debug("Failed to find owner for topic: {}", topicName, oe);
             throw new RestException(oe);
         }
     }
@@ -621,7 +665,7 @@ public abstract class PulsarWebResource {
                 URI redirect = getRedirectionUrl(peerClusterData);
                 // redirect to the cluster requested
                 if (log.isDebugEnabled()) {
-                    log.debug("[{}] Redirecting the rest call to {}: cluster={}", redirect, peerClusterData);
+                    log.debug("[{}] Redirecting the rest call to {}: cluster={}", clientAppId(),redirect, peerClusterData);
 
                 }
                 throw new WebApplicationException(Response.temporaryRedirect(redirect).build());
@@ -678,7 +722,7 @@ public abstract class PulsarWebResource {
                 }
             } else {
                 String msg = String.format("Policies not found for %s namespace", namespace.toString());
-                log.error(msg);
+                log.warn(msg);
                 validationFuture.completeExceptionally(new RestException(Status.NOT_FOUND, msg));
             }
         }).exceptionally(ex -> {
@@ -751,7 +795,7 @@ public abstract class PulsarWebResource {
 
         String leaderAddress = pulsar.getLeaderElectionService().getCurrentLeader().getServiceUrl();
 
-        String myAddress = pulsar.getWebServiceAddress();
+        String myAddress = pulsar.getSafeWebServiceAddress();
 
         return myAddress.equals(leaderAddress); // If i am the leader, my decisions are
     }
@@ -759,4 +803,59 @@ public abstract class PulsarWebResource {
     // Non-Usual HTTP error codes
     protected static final int NOT_IMPLEMENTED = 501;
 
+    public void validateTenantOperation(String tenant, TenantOperation operation) {
+        if (pulsar().getConfiguration().isAuthenticationEnabled()
+            && pulsar().getBrokerService().isAuthorizationEnabled()) {
+            if (!isClientAuthenticated(clientAppId())) {
+                throw new RestException(Status.UNAUTHORIZED, "Need to authenticate to perform the request");
+            }
+
+            boolean isAuthorized = pulsar().getBrokerService().getAuthorizationService()
+                .allowTenantOperation(tenant, operation, originalPrincipal(), clientAppId(), clientAuthData());
+            if (!isAuthorized) {
+                throw new RestException(Status.UNAUTHORIZED,
+                    String.format("Unauthorized to validateTenantOperation for"
+                            + " originalPrincipal [%s] and clientAppId [%s] about operation [%s] on tenant [%s]",
+                        originalPrincipal(), clientAppId(), operation.toString(), tenant));
+            }
+        }
+    }
+
+    public void validateNamespaceOperation(NamespaceName namespaceName, NamespaceOperation operation) {
+        if (pulsar().getConfiguration().isAuthenticationEnabled()
+            && pulsar().getBrokerService().isAuthorizationEnabled()) {
+            if (!isClientAuthenticated(clientAppId())) {
+                throw new RestException(Status.FORBIDDEN, "Need to authenticate to perform the request");
+            }
+
+            boolean isAuthorized = pulsar().getBrokerService().getAuthorizationService()
+                    .allowNamespaceOperation(namespaceName, operation, originalPrincipal(),
+                        clientAppId(), clientAuthData());
+
+            if (!isAuthorized) {
+                throw new RestException(Status.FORBIDDEN, String.format("Unauthorized to validateNamespaceOperation for" +
+                        " operation [%s] on namespace [%s]", operation.toString(), namespaceName));
+            }
+        }
+    }
+
+    public void validateNamespacePolicyOperation(NamespaceName namespaceName,
+                                                 PolicyName policy,
+                                                 PolicyOperation operation) {
+        if (pulsar().getConfiguration().isAuthenticationEnabled()
+            && pulsar().getBrokerService().isAuthorizationEnabled()) {
+            if (!isClientAuthenticated(clientAppId())) {
+                throw new RestException(Status.FORBIDDEN, "Need to authenticate to perform the request");
+            }
+
+            boolean isAuthorized = pulsar().getBrokerService().getAuthorizationService()
+                    .allowNamespacePolicyOperation(namespaceName, policy, operation,
+                        originalPrincipal(), clientAppId(), clientAuthData());
+
+            if (!isAuthorized) {
+                throw new RestException(Status.FORBIDDEN, String.format("Unauthorized to validateNamespacePolicyOperation for" +
+                        " operation [%s] on namespace [%s] on policy [%s]", operation.toString(), namespaceName, policy.toString()));
+            }
+        }
+    }
 }

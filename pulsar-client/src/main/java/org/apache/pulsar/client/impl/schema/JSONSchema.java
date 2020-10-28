@@ -25,12 +25,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchemaGenerator;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.pulsar.client.api.SchemaSerializationException;
 import org.apache.pulsar.client.api.schema.SchemaDefinition;
+import org.apache.pulsar.client.api.schema.SchemaReader;
+import org.apache.pulsar.client.api.schema.SchemaWriter;
+import org.apache.pulsar.client.impl.schema.reader.JacksonJsonReader;
+import org.apache.pulsar.client.impl.schema.writer.JacksonJsonWriter;
+import org.apache.pulsar.common.protocol.schema.BytesSchemaVersion;
 import org.apache.pulsar.common.schema.SchemaInfo;
 import org.apache.pulsar.common.schema.SchemaType;
 
-import java.io.IOException;
 import java.util.Map;
 
 /**
@@ -48,39 +51,17 @@ public class JSONSchema<T> extends StructSchema<T> {
     });
 
     private final Class<T> pojo;
-    private final ObjectMapper objectMapper;
 
-    private JSONSchema(org.apache.avro.Schema schema,
-                        SchemaDefinition<T> schemaDefinition) {
-        super(
-            SchemaType.JSON,
-            schema,
-            schemaDefinition.getProperties());
-        this.pojo = schemaDefinition.getPojo();
-        this.objectMapper = JSON_MAPPER.get();
+    private JSONSchema(SchemaInfo schemaInfo, Class<T> pojo, SchemaReader<T> reader, SchemaWriter<T> writer) {
+        super(schemaInfo);
+        this.pojo = pojo;
+        setWriter(writer);
+        setReader(reader);
     }
 
     @Override
-    public byte[] encode(T message) throws SchemaSerializationException {
-        try {
-            return objectMapper.writeValueAsBytes(message);
-        } catch (JsonProcessingException e) {
-            throw new SchemaSerializationException(e);
-        }
-    }
-
-    @Override
-    public T decode(byte[] bytes) {
-        try {
-            return objectMapper.readValue(bytes, this.pojo);
-        } catch (IOException e) {
-            throw new SchemaSerializationException(e);
-        }
-    }
-
-    @Override
-    public SchemaInfo getSchemaInfo() {
-        return this.schemaInfo;
+    protected SchemaReader<T> loadReader(BytesSchemaVersion schemaVersion) {
+        throw new RuntimeException("JSONSchema don't support schema versioning");
     }
 
     /**
@@ -108,9 +89,11 @@ public class JSONSchema<T> extends StructSchema<T> {
     }
 
     public static <T> JSONSchema<T> of(SchemaDefinition<T> schemaDefinition) {
-        String jsonDef = schemaDefinition.getJsonDef();
-            return jsonDef == null ? new JSONSchema<>(createAvroSchema(schemaDefinition), schemaDefinition) :
-                    new JSONSchema<>(parseAvroSchema(jsonDef), schemaDefinition);
+        SchemaReader<T> reader = schemaDefinition.getSchemaReaderOpt()
+                .orElseGet(() -> new JacksonJsonReader<>(JSON_MAPPER.get(), schemaDefinition.getPojo()));
+        SchemaWriter<T> writer = schemaDefinition.getSchemaWriterOpt()
+                .orElseGet(() -> new JacksonJsonWriter<>(JSON_MAPPER.get()));
+        return new JSONSchema<>(parseSchemaInfo(schemaDefinition, SchemaType.JSON), schemaDefinition.getPojo(), reader, writer);
     }
 
     public static <T> JSONSchema<T> of(Class<T> pojo) {

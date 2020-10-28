@@ -33,6 +33,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.core.Response.Status;
 
+import org.apache.pulsar.common.util.RestException;
 import org.apache.pulsar.policies.data.loadbalancer.LoadManagerReport;
 import org.apache.pulsar.zookeeper.ZooKeeperClientFactory;
 import org.apache.pulsar.zookeeper.ZookeeperClientFactoryImpl;
@@ -80,6 +81,15 @@ public class DiscoveryServiceServlet extends HttpServlet {
             zkCache = new ZookeeperCacheLoader(zkClientFactory, zookeeperServers, zookeeperSessionTimeoutMs);
         } catch (Throwable t) {
             throw new ServletException(t);
+        }
+    }
+
+    @Override
+    public void destroy() {
+        try {
+            zkCache.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -139,7 +149,7 @@ public class DiscoveryServiceServlet extends HttpServlet {
                 location.append('?').append(request.getQueryString());
             }
             if (log.isDebugEnabled()) {
-                log.info("Redirecting to {}", location);
+                log.debug("Redirecting to {}", location);
             }
 
             response.setStatus(HttpServletResponse.SC_TEMPORARY_REDIRECT);

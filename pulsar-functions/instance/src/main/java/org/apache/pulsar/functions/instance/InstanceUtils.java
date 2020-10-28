@@ -20,26 +20,26 @@ package org.apache.pulsar.functions.instance;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.apache.commons.lang3.StringUtils.isEmpty;
-import static org.apache.pulsar.functions.utils.ComponentType.FUNCTION;
-import static org.apache.pulsar.functions.utils.ComponentType.SINK;
-import static org.apache.pulsar.functions.utils.ComponentType.SOURCE;
 
 import lombok.experimental.UtilityClass;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.functions.api.SerDe;
 import org.apache.pulsar.functions.proto.Function;
 import org.apache.pulsar.functions.sink.PulsarSink;
-import org.apache.pulsar.functions.utils.ComponentType;
-import org.apache.pulsar.functions.utils.Reflections;
+import org.apache.pulsar.common.util.Reflections;
 
 import net.jodah.typetools.TypeResolver;
 import org.apache.pulsar.functions.utils.FunctionCommon;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @UtilityClass
 public class InstanceUtils {
     public static SerDe<?> initializeSerDe(String serdeClassName, ClassLoader clsLoader, Class<?> typeArg,
@@ -89,23 +89,26 @@ public class InstanceUtils {
         }
     }
 
-    public ComponentType calculateSubjectType(Function.FunctionDetails functionDetails) {
+    public Function.FunctionDetails.ComponentType calculateSubjectType(Function.FunctionDetails functionDetails) {
+        if (functionDetails.getComponentType() != Function.FunctionDetails.ComponentType.UNKNOWN) {
+            return functionDetails.getComponentType();
+        }
         Function.SourceSpec sourceSpec = functionDetails.getSource();
         Function.SinkSpec sinkSpec = functionDetails.getSink();
         if (sourceSpec.getInputSpecsCount() == 0) {
-            return SOURCE;
+            return Function.FunctionDetails.ComponentType.SOURCE;
         }
         // Now its between sink and function
 
         if (!isEmpty(sinkSpec.getBuiltin())) {
             // if its built in, its a sink
-            return SINK;
+            return Function.FunctionDetails.ComponentType.SINK;
         }
 
         if (isEmpty(sinkSpec.getClassName()) || sinkSpec.getClassName().equals(PulsarSink.class.getName())) {
-            return FUNCTION;
+            return Function.FunctionDetails.ComponentType.FUNCTION;
         }
-        return SINK;
+        return Function.FunctionDetails.ComponentType.SINK;
     }
 
     public static String getDefaultSubscriptionName(String tenant, String namespace, String name) {
@@ -119,7 +122,7 @@ public class InstanceUtils {
                 functionDetails.getName());
     }
 
-    public static Map<String, String> getProperties(ComponentType componentType,
+    public static Map<String, String> getProperties(Function.FunctionDetails.ComponentType componentType,
                                                     String fullyQualifiedName, int instanceId) {
         Map<String, String> properties = new HashMap<>();
         switch (componentType) {
@@ -135,6 +138,11 @@ public class InstanceUtils {
         }
         properties.put("id", fullyQualifiedName);
         properties.put("instance_id", String.valueOf(instanceId));
+        try {
+            properties.put("instance_hostname", InetAddress.getLocalHost().getHostName());
+        } catch (UnknownHostException e) {
+            log.warn("[{}:{}] Failed to get hostname of instance", fullyQualifiedName, instanceId, e);
+        }
         return properties;
     }
 }

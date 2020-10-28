@@ -162,4 +162,3 @@ Configuration:
 #           onMisMatch: DENY
 #           ScriptRef:
 #             ref: filter.js
-

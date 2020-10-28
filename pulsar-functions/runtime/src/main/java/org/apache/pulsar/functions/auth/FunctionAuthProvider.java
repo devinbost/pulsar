@@ -20,6 +20,8 @@ package org.apache.pulsar.functions.auth;
 
 import org.apache.pulsar.broker.authentication.AuthenticationDataSource;
 import org.apache.pulsar.functions.instance.AuthenticationConfig;
+import org.apache.pulsar.functions.proto.Function;
+import org.apache.pulsar.common.util.Reflections;
 
 import java.util.Optional;
 
@@ -34,26 +36,28 @@ public interface FunctionAuthProvider {
      * @param authConfig authentication configs passed to the function instance
      * @param functionAuthData function authentication data that is provider specific
      */
-    void configureAuthenticationConfig(AuthenticationConfig authConfig, FunctionAuthData functionAuthData);
+    void configureAuthenticationConfig(AuthenticationConfig authConfig, Optional<FunctionAuthData> functionAuthData);
 
     /**
      * Cache auth data in as part of function metadata for function that runtime may need to configure authentication
-     * @param tenant tenant that the function is running under
-     * @param namespace namespace that is the function is running under
-     * @param name name of the function
+     * @param funcDetails the function details
      * @param authenticationDataSource auth data
      * @return
      * @throws Exception
      */
-    Optional<FunctionAuthData> cacheAuthData(String tenant, String namespace, String name, AuthenticationDataSource authenticationDataSource) throws Exception;
+    Optional<FunctionAuthData> cacheAuthData(Function.FunctionDetails funcDetails, AuthenticationDataSource authenticationDataSource) throws Exception;
+
+    Optional<FunctionAuthData> updateAuthData(Function.FunctionDetails funcDetails, Optional<FunctionAuthData> existingFunctionAuthData, AuthenticationDataSource authenticationDataSource) throws Exception;
 
     /**
      * Clean up operation for auth when function is terminated
-     * @param tenant tenant that the function is running under
-     * @param namespace namespace that is the function is running under
-     * @param name name of the function
+     * @param funcDetails the function details
      * @param functionAuthData function auth data
      * @throws Exception
      */
-    void cleanUpAuthData(String tenant, String namespace, String name, FunctionAuthData functionAuthData) throws Exception;
+    void cleanUpAuthData(Function.FunctionDetails funcDetails, Optional<FunctionAuthData> functionAuthData) throws Exception;
+
+    static FunctionAuthProvider getAuthProvider(String className) {
+        return Reflections.createInstance(className, FunctionAuthProvider.class, Thread.currentThread().getContextClassLoader());
+    }
 }

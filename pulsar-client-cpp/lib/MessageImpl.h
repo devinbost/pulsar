@@ -42,9 +42,15 @@ class MessageImpl {
     MessageId messageId;
     ClientConnection* cnx_;
     const std::string* topicName_;
+    int redeliveryCount_;
+    bool hasSchemaVersion_;
+    const std::string* schemaVersion_;
 
     const std::string& getPartitionKey() const;
     bool hasPartitionKey() const;
+
+    const std::string& getOrderingKey() const;
+    bool hasOrderingKey() const;
 
     uint64_t getPublishTimestamp() const;
     uint64_t getEventTimestamp() const;
@@ -59,6 +65,13 @@ class MessageImpl {
      */
     void setTopicName(const std::string& topicName);
 
+    int getRedeliveryCount();
+    void setRedeliveryCount(int count);
+
+    bool hasSchemaVersion() const;
+    const std::string& getSchemaVersion() const;
+    void setSchemaVersion(const std::string& value);
+
     friend class PulsarWrapper;
     friend class MessageBuilder;
 
@@ -67,6 +80,7 @@ class MessageImpl {
     void setProperty(const std::string& name, const std::string& value);
     void disableReplication(bool flag);
     void setPartitionKey(const std::string& partitionKey);
+    void setOrderingKey(const std::string& orderingKey);
     void setEventTimestamp(uint64_t eventTimestamp);
     Message::StringMap properties_;
 };

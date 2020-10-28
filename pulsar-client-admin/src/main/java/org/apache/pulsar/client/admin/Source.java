@@ -18,18 +18,10 @@
  */
 package org.apache.pulsar.client.admin;
 
-import org.apache.pulsar.client.admin.PulsarAdminException.NotAuthorizedException;
-import org.apache.pulsar.client.admin.PulsarAdminException.NotFoundException;
-import org.apache.pulsar.client.admin.PulsarAdminException.PreconditionFailedException;
-import org.apache.pulsar.common.io.ConnectorDefinition;
-import org.apache.pulsar.common.io.SourceConfig;
-import org.apache.pulsar.common.policies.data.SourceStatus;
-
-import java.util.List;
-
 /**
- * Admin interface for Source management.
+ * @deprecated in favor of {@link Sources}
  */
+<<<<<<< HEAD
 public interface Source {
     /**
      * Get the list of sources.
@@ -354,4 +346,8 @@ public interface Source {
      *
      */
     List<ConnectorDefinition> getBuiltInSources() throws PulsarAdminException;
+=======
+@Deprecated
+public interface Source extends Sources {
+>>>>>>> upstream/master
 }

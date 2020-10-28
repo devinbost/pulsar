@@ -18,18 +18,10 @@
  */
 package org.apache.pulsar.client.admin;
 
-import org.apache.pulsar.client.admin.PulsarAdminException.NotAuthorizedException;
-import org.apache.pulsar.client.admin.PulsarAdminException.NotFoundException;
-import org.apache.pulsar.client.admin.PulsarAdminException.PreconditionFailedException;
-import org.apache.pulsar.common.io.ConnectorDefinition;
-import org.apache.pulsar.common.policies.data.SinkStatus;
-import org.apache.pulsar.common.io.SinkConfig;
-
-import java.util.List;
-
 /**
- * Admin interface for Sink management.
+ * @deprecated in favor of {@link Sinks}
  */
+<<<<<<< HEAD
 public interface Sink {
     /**
      * Get the list of sinks.
@@ -344,13 +336,9 @@ public interface Sink {
      */
     void startSink(String tenant, String namespace, String sink) throws PulsarAdminException;
 
+=======
+@Deprecated
+public interface Sink extends Sinks {
+>>>>>>> upstream/master
 
-    /**
-     * Fetches a list of supported Pulsar IO sinks currently running in cluster mode
-     *
-     * @throws PulsarAdminException
-     *             Unexpected error
-     *
-     */
-    List<ConnectorDefinition> getBuiltInSinks() throws PulsarAdminException;
 }

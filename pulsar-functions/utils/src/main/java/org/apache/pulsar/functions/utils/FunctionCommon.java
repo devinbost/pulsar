@@ -31,7 +31,6 @@ import java.net.*;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.UUID;
@@ -42,9 +41,11 @@ import org.apache.pulsar.client.impl.TopicMessageIdImpl;
 import org.apache.pulsar.common.functions.FunctionConfig;
 import org.apache.pulsar.common.functions.Utils;
 import org.apache.pulsar.common.nar.NarClassLoader;
+import org.apache.pulsar.common.util.ClassLoaderUtils;
 import org.apache.pulsar.functions.api.Function;
 import org.apache.pulsar.functions.api.WindowFunction;
 import org.apache.pulsar.functions.proto.Function.FunctionDetails.Runtime;
+import org.apache.pulsar.io.core.BatchSource;
 import org.apache.pulsar.io.core.Sink;
 import org.apache.pulsar.io.core.Source;
 
@@ -86,46 +87,33 @@ public class FunctionCommon {
         }
     }
 
-    public static Class<?>[] getFunctionTypes(FunctionConfig functionConfig, ClassLoader classLoader) {
-        Object userClass = createInstance(functionConfig.getClassName(), classLoader);
+    public static Class<?>[] getFunctionTypes(FunctionConfig functionConfig, ClassLoader classLoader) throws ClassNotFoundException {
         boolean isWindowConfigPresent = functionConfig.getWindowConfig() != null;
-        return getFunctionTypes(userClass, isWindowConfigPresent);
+        Class functionClass = classLoader.loadClass(functionConfig.getClassName());
+        return getFunctionTypes(functionClass, isWindowConfigPresent);
     }
     
-    public static Class<?>[] getFunctionTypes(Object userClass, boolean isWindowConfigPresent) {
-
+    public static Class<?>[] getFunctionTypes(Class userClass, boolean isWindowConfigPresent) {
         Class<?>[] typeArgs;
         // if window function
         if (isWindowConfigPresent) {
-            if (userClass instanceof WindowFunction) {
-                WindowFunction function = (WindowFunction) userClass;
-                if (function == null) {
-                    throw new IllegalArgumentException(
-                            String.format("The WindowFunction class %s could not be instantiated", userClass));
-                }
-                typeArgs = TypeResolver.resolveRawArguments(WindowFunction.class, function.getClass());
+            if (WindowFunction.class.isAssignableFrom(userClass)) {
+                typeArgs = TypeResolver.resolveRawArguments(WindowFunction.class, userClass);
             } else {
-                java.util.function.Function function = (java.util.function.Function) userClass;
-                if (function == null) {
-                    throw new IllegalArgumentException(
-                            String.format("The Java util function class %s could not be instantiated", userClass));
-                }
-                typeArgs = TypeResolver.resolveRawArguments(java.util.function.Function.class, function.getClass());
+                typeArgs = TypeResolver.resolveRawArguments(java.util.function.Function.class, userClass);
                 if (!typeArgs[0].equals(Collection.class)) {
                     throw new IllegalArgumentException("Window function must take a collection as input");
                 }
-                Type type = TypeResolver.resolveGenericType(java.util.function.Function.class, function.getClass());
+                Type type = TypeResolver.resolveGenericType(java.util.function.Function.class, userClass);
                 Type collectionType = ((ParameterizedType) type).getActualTypeArguments()[0];
                 Type actualInputType = ((ParameterizedType) collectionType).getActualTypeArguments()[0];
                 typeArgs[0] = (Class<?>) actualInputType;
             }
         } else {
-            if (userClass instanceof Function) {
-                Function pulsarFunction = (Function) userClass;
-                typeArgs = TypeResolver.resolveRawArguments(Function.class, pulsarFunction.getClass());
+            if (Function.class.isAssignableFrom(userClass)) {
+                typeArgs = TypeResolver.resolveRawArguments(Function.class, userClass);
             } else {
-                java.util.function.Function function = (java.util.function.Function) userClass;
-                typeArgs = TypeResolver.resolveRawArguments(java.util.function.Function.class, function.getClass());
+                typeArgs = TypeResolver.resolveRawArguments(java.util.function.Function.class, userClass);
             }
         }
 
@@ -136,10 +124,10 @@ public class FunctionCommon {
         Class<?> theCls;
         try {
             theCls = Class.forName(userClassName);
-        } catch (ClassNotFoundException cnfe) {
+        } catch (ClassNotFoundException | NoClassDefFoundError cnfe) {
             try {
                 theCls = Class.forName(userClassName, true, classLoader);
-            } catch (ClassNotFoundException e) {
+            } catch (ClassNotFoundException | NoClassDefFoundError e) {
                 throw new RuntimeException("User class must be in class path", cnfe);
             }
         }
@@ -199,43 +187,30 @@ public class FunctionCommon {
         throw new RuntimeException("Unrecognized processing guarantee: " + processingGuarantees.name());
     }
 
-
-    public static Class<?> getSourceType(String className, ClassLoader classloader) {
-
-        Object userClass = Reflections.createInstance(className, classloader);
-        Class<?> typeArg;
-        Source source = (Source) userClass;
-        if (source == null) {
-            throw new IllegalArgumentException(String.format("The Pulsar source class %s could not be instantiated",
-                    className));
-        }
-        typeArg = TypeResolver.resolveRawArgument(Source.class, source.getClass());
-
-        return typeArg;
+    public static Class<?> getSourceType(String className, ClassLoader classLoader) throws ClassNotFoundException {
+        return getSourceType(classLoader.loadClass(className));
     }
 
-    public static Class<?> getSinkType(String className, ClassLoader classLoader) {
+    public static Class<?>getSourceType(Class sourceClass) {
 
-        Object userClass = Reflections.createInstance(className, classLoader);
-        Class<?> typeArg;
-        Sink sink = (Sink) userClass;
-        if (sink == null) {
-            throw new IllegalArgumentException(String.format("The Pulsar sink class %s could not be instantiated",
-                    className));
+        if (Source.class.isAssignableFrom(sourceClass)) {
+            return TypeResolver.resolveRawArgument(Source.class, sourceClass);
+        } else if (BatchSource.class.isAssignableFrom(sourceClass)) {
+            return TypeResolver.resolveRawArgument(BatchSource.class, sourceClass);
+        } else {
+            throw new IllegalArgumentException(
+              String.format("Source class %s does not implement the correct interface",
+                sourceClass.getName()));
         }
-        typeArg = TypeResolver.resolveRawArgument(Sink.class, sink.getClass());
-
-        return typeArg;
     }
 
-    public static ClassLoader extractClassLoader(Path archivePath, File packageFile) throws Exception {
-        if (archivePath != null) {
-            return loadJar(archivePath.toFile());
-        }
-        if (packageFile != null) {
-            return loadJar(packageFile);
-        }
-        return null;
+    public static Class<?> getSinkType(String className, ClassLoader classLoader) throws ClassNotFoundException {
+
+        Class userClass = classLoader.loadClass(className);
+
+        Class<?> typeArg = TypeResolver.resolveRawArgument(Sink.class, userClass);
+
+        return typeArg;
     }
 
     public static void downloadFromHttpUrl(String destPkgUrl, File targetFile) throws IOException {
@@ -249,22 +224,10 @@ public class FunctionCommon {
         log.info("Downloading function package from {} to {} completed!", destPkgUrl, targetFile.getAbsoluteFile());
     }
 
-    /**
-     * Load a jar.
-     *
-     * @param jar file of jar
-     * @return classloader
-     * @throws MalformedURLException
-     */
-    public static ClassLoader loadJar(File jar) throws MalformedURLException {
-        java.net.URL url = jar.toURI().toURL();
-        return new URLClassLoader(new URL[]{url});
-    }
-
     public static ClassLoader extractClassLoader(String destPkgUrl) throws IOException, URISyntaxException {
         File file = extractFileFromPkgURL(destPkgUrl);
         try {
-            return loadJar(file);
+            return ClassLoaderUtils.loadJar(file);
         } catch (MalformedURLException e) {
             throw new IllegalArgumentException(
                     "Corrupt User PackageFile " + file + " with error " + e.getMessage());
@@ -293,39 +256,12 @@ public class FunctionCommon {
         }
     }
 
-    public static void implementsClass(String className, Class<?> klass, ClassLoader classLoader) {
-        Class<?> objectClass;
-        try {
-            objectClass = loadClass(className, classLoader);
-        } catch (ClassNotFoundException e) {
-            throw new IllegalArgumentException("Cannot find/load class " + className);
-        }
-
-        if (!klass.isAssignableFrom(objectClass)) {
-            throw new IllegalArgumentException(
-                    String.format("%s does not implement %s", className, klass.getName()));
-        }
-    }
-
-    public static Class<?> loadClass(String className, ClassLoader classLoader) throws ClassNotFoundException {
-        Class<?> objectClass;
-        try {
-            objectClass = Class.forName(className);
-        } catch (ClassNotFoundException e) {
-            if (classLoader != null) {
-                objectClass = classLoader.loadClass(className);
-            } else {
-                throw e;
-            }
-        }
-        return objectClass;
-    }
-
-    public static NarClassLoader extractNarClassLoader(Path archivePath, File packageFile) {
+    public static NarClassLoader extractNarClassLoader(Path archivePath, File packageFile,
+                                                       String narExtractionDirectory) {
         if (archivePath != null) {
             try {
                 return NarClassLoader.getFromArchive(archivePath.toFile(),
-                            Collections.emptySet());
+                            Collections.emptySet(), narExtractionDirectory);
             } catch (IOException e) {
                 throw new IllegalArgumentException(String.format("The archive %s is corrupted", archivePath));
             }
@@ -334,7 +270,7 @@ public class FunctionCommon {
         if (packageFile != null) {
             try {
                 return NarClassLoader.getFromArchive(packageFile,
-                        Collections.emptySet());
+                        Collections.emptySet(), narExtractionDirectory);
             } catch (IOException e) {
                 throw new IllegalArgumentException(e.getMessage());
             }
@@ -413,6 +349,26 @@ public class FunctionCommon {
         return String.format("%s/%s/%s", tenant, namespace, functionName);
     }
 
+    public static String extractTenantFromFullyQualifiedName(String fqfn) {
+        return extractFromFullyQualifiedName(fqfn, 0);
+    }
+
+    public static String extractNamespaceFromFullyQualifiedName(String fqfn) {
+        return extractFromFullyQualifiedName(fqfn, 1);
+    }
+
+    public static String extractNameFromFullyQualifiedName(String fqfn) {
+        return extractFromFullyQualifiedName(fqfn, 2);
+    }
+
+    private static String extractFromFullyQualifiedName(String fqfn, int index) {
+        String[] parts = fqfn.split("/");
+        if (parts.length >= 3) {
+            return parts[index];
+        }
+        throw new RuntimeException("Invalid Fully Qualified Function Name " + fqfn);
+    }
+
     public static Class<?> getTypeArg(String className, Class<?> funClass, ClassLoader classLoader)
             throws ClassNotFoundException {
         Class<?> loadedClass = classLoader.loadClass(className);
@@ -421,5 +377,10 @@ public class FunctionCommon {
                     String.format("class %s is not type of %s", className, funClass.getName()));
         }
         return TypeResolver.resolveRawArgument(funClass, loadedClass);
+    }
+
+    public static double roundDecimal(double value, int places) {
+        double scale = Math.pow(10, places);
+        return Math.round(value * scale) / scale;
     }
 }

@@ -19,8 +19,7 @@
 package org.apache.pulsar.common.schema;
 
 /**
- * Types of supported schema for Pulsar messages
- *
+ * Types of supported schema for Pulsar messages.
  *
  * <p>Ideally we should have just one single set of enum definitions
  * for schema type. but we have 3 locations of defining schema types.
@@ -32,32 +31,32 @@ package org.apache.pulsar.common.schema;
  */
 public enum SchemaType {
     /**
-     * No schema defined
+     * No schema defined.
      */
     NONE(0),
 
     /**
-     * Simple String encoding with UTF-8
+     * Simple String encoding with UTF-8.
      */
     STRING(1),
 
     /**
-     * JSON object encoding and validation
+     * JSON object encoding and validation.
      */
     JSON(2),
 
     /**
-     * Protobuf message encoding and decoding
+     * Protobuf message encoding and decoding.
      */
     PROTOBUF(3),
 
     /**
-     * Serialize and deserialize via avro
+     * Serialize and deserialize via avro.
      */
     AVRO(4),
 
     /**
-     * boolean schema defined
+     * boolean schema defined.
      * @since 2.3.0
      */
     BOOLEAN(5),
@@ -88,24 +87,24 @@ public enum SchemaType {
     FLOAT(10),
 
     /**
-     * A double number
+     * A double number.
      */
     DOUBLE(11),
 
     /**
-     * Date
+     * Date.
      * @since 2.4.0
      */
     DATE(12),
 
     /**
-     * Time
+     * Time.
      * @since 2.4.0
      */
     TIME(13),
 
     /**
-     * Timestamp
+     * Timestamp.
      * @since 2.4.0
      */
     TIMESTAMP(14),
@@ -114,6 +113,26 @@ public enum SchemaType {
      * A Schema that contains Key Schema and Value Schema.
      */
     KEY_VALUE(15),
+
+    /**
+     * Instant.
+     */
+    INSTANT(16),
+
+    /**
+     * LocalDate.
+     */
+    LOCAL_DATE(17),
+
+    /**
+     * LocalTime.
+     */
+    LOCAL_TIME(18),
+
+    /**
+     * LocalDateTime.
+     */
+    LOCAL_DATE_TIME(19),
 
     //
     // Schemas that don't have schema info. the value should be negative.
@@ -168,6 +187,10 @@ public enum SchemaType {
           case 13: return TIME;
           case 14: return TIMESTAMP;
           case 15: return KEY_VALUE;
+          case 16: return INSTANT;
+          case 17: return LOCAL_DATE;
+          case 18: return LOCAL_TIME;
+          case 19: return LOCAL_DATE_TIME;
           case -1: return BYTES;
           case -2: return AUTO;
           case -3: return AUTO_CONSUME;
@@ -175,4 +198,50 @@ public enum SchemaType {
           default: return NONE;
         }
       }
+
+
+    public boolean isPrimitive() {
+        return isPrimitiveType(this);
+    }
+
+    public boolean isStruct() {
+        return isStructType(this);
+    }
+
+    public static boolean isPrimitiveType(SchemaType type) {
+        switch (type) {
+            case STRING:
+            case BOOLEAN:
+            case INT8:
+            case INT16:
+            case INT32:
+            case INT64:
+            case FLOAT:
+            case DOUBLE:
+            case DATE:
+            case TIME:
+            case TIMESTAMP:
+            case BYTES:
+            case INSTANT:
+            case LOCAL_DATE:
+            case LOCAL_TIME:
+            case LOCAL_DATE_TIME:
+            case NONE:
+                return true;
+            default:
+                return false;
+        }
+
+    }
+
+    public static boolean isStructType(SchemaType type) {
+        switch (type) {
+            case AVRO:
+            case JSON:
+            case PROTOBUF:
+                return true;
+            default:
+                return false;
+        }
+    }
 }

@@ -29,6 +29,7 @@ import javax.ws.rs.core.UriInfo;
 
 import org.apache.pulsar.broker.authentication.AuthenticationDataHttps;
 import org.apache.pulsar.common.naming.TopicName;
+import org.apache.pulsar.common.util.RestException;
 import org.apache.pulsar.websocket.WebSocketService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,7 +97,7 @@ public class WebSocketWebResource {
      *             if not authorized
      */
     protected void validateSuperUserAccess() {
-        if (service().getConfig().isAuthenticationEnabled() && !service().getConfig().isSaslAuthentication()) {
+        if (service().getConfig().isAuthenticationEnabled()) {
             String appId = clientAppId();
             if (log.isDebugEnabled()) {
                 log.debug("[{}] Check super user access: Authenticated: {} -- Role: {}", uri.getRequestUri(),

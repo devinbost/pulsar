@@ -19,15 +19,16 @@
 package org.apache.pulsar.broker.service;
 
 import static org.apache.pulsar.broker.auth.MockedPulsarServiceBaseTest.createMockZooKeeper;
-import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
-import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Future;
@@ -43,15 +44,13 @@ import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
 import org.apache.pulsar.broker.PulsarService;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.namespace.NamespaceService;
-import org.apache.pulsar.broker.service.BrokerService;
-import org.apache.pulsar.broker.service.Consumer;
-import org.apache.pulsar.broker.service.ServerCnx;
 import org.apache.pulsar.broker.service.persistent.PersistentSubscription;
 import org.apache.pulsar.broker.service.persistent.PersistentTopic;
 import org.apache.pulsar.common.api.proto.PulsarApi;
 import org.apache.pulsar.common.api.proto.PulsarApi.CommandSubscribe.InitialPosition;
 import org.apache.pulsar.common.naming.TopicName;
 import org.apache.pulsar.common.naming.NamespaceBundle;
+import org.apache.pulsar.common.policies.data.InactiveTopicDeleteMode;
 import org.apache.pulsar.common.util.collections.ConcurrentOpenHashMap;
 import org.apache.zookeeper.ZooKeeper;
 import org.slf4j.Logger;
@@ -105,6 +104,7 @@ public class PersistentTopicConcurrentTest extends MockedBookKeeperTestCase {
         doReturn(nsSvc).when(pulsar).getNamespaceService();
         doReturn(true).when(nsSvc).isServiceUnitOwned(any(NamespaceBundle.class));
         doReturn(true).when(nsSvc).isServiceUnitActive(any(TopicName.class));
+        doReturn(CompletableFuture.completedFuture(true)).when(nsSvc).checkTopicOwnership(any(TopicName.class));
 
         final List<Position> addedEntries = Lists.newArrayList();
 
@@ -123,7 +123,8 @@ public class PersistentTopicConcurrentTest extends MockedBookKeeperTestCase {
                 .setSubType(PulsarApi.CommandSubscribe.SubType.Exclusive).build();
 
         Future<Consumer> f1 = topic.subscribe(serverCnx, cmd.getSubscription(), cmd.getConsumerId(), cmd.getSubType(),
-                0, cmd.getConsumerName(), cmd.getDurable(), null, Collections.emptyMap(), cmd.getReadCompacted(), InitialPosition.Latest);
+                0, cmd.getConsumerName(), cmd.getDurable(), null, Collections.emptyMap(), cmd.getReadCompacted(), InitialPosition.Latest,
+                0 /*avoid reseting cursor*/, false /* replicated */, null);
         f1.get();
 
         final CyclicBarrier barrier = new CyclicBarrier(2);
@@ -169,7 +170,7 @@ public class PersistentTopicConcurrentTest extends MockedBookKeeperTestCase {
         unsubscriber.start();
 
         counter.await();
-        assertEquals(gotException.get(), false);
+        assertFalse(gotException.get());
     }
 
     // @Test
@@ -181,7 +182,8 @@ public class PersistentTopicConcurrentTest extends MockedBookKeeperTestCase {
                 .setSubType(PulsarApi.CommandSubscribe.SubType.Exclusive).build();
 
         Future<Consumer> f1 = topic.subscribe(serverCnx, cmd.getSubscription(), cmd.getConsumerId(), cmd.getSubType(),
-                0, cmd.getConsumerName(), cmd.getDurable(), null, Collections.emptyMap(), cmd.getReadCompacted(), InitialPosition.Latest);
+                0, cmd.getConsumerName(), cmd.getDurable(), null, Collections.emptyMap(), cmd.getReadCompacted(), InitialPosition.Latest,
+                0 /*avoid reseting cursor*/, false /* replicated */, null);
         f1.get();
 
         final CyclicBarrier barrier = new CyclicBarrier(2);
@@ -196,7 +198,9 @@ public class PersistentTopicConcurrentTest extends MockedBookKeeperTestCase {
                     // Thread.sleep(5,0);
                     log.info("{} forcing topic GC ", Thread.currentThread());
                     for (int i = 0; i < 2000; i++) {
-                        topic.checkGC(0);
+                        topic.getInactiveTopicPolicies().setMaxInactiveDurationSeconds(0);
+                        topic.getInactiveTopicPolicies().setInactiveTopicDeleteMode(InactiveTopicDeleteMode.delete_when_no_subscriptions);
+                        topic.checkGC();
                     }
                     log.info("GC done..");
                 } catch (Exception e) {
@@ -231,7 +235,7 @@ public class PersistentTopicConcurrentTest extends MockedBookKeeperTestCase {
         unsubscriber.start();
 
         counter.await();
-        assertEquals(gotException.get(), false);
+        assertFalse(gotException.get());
     }
 
     // @Test
@@ -243,7 +247,8 @@ public class PersistentTopicConcurrentTest extends MockedBookKeeperTestCase {
                 .setSubType(PulsarApi.CommandSubscribe.SubType.Exclusive).build();
 
         Future<Consumer> f1 = topic.subscribe(serverCnx, cmd.getSubscription(), cmd.getConsumerId(), cmd.getSubType(),
-                0, cmd.getConsumerName(), cmd.getDurable(), null, Collections.emptyMap(), cmd.getReadCompacted(), InitialPosition.Latest);
+                0, cmd.getConsumerName(), cmd.getDurable(), null, Collections.emptyMap(), cmd.getReadCompacted(), InitialPosition.Latest,
+                0 /*avoid reseting cursor*/, false /* replicated */, null);
         f1.get();
 
         final CyclicBarrier barrier = new CyclicBarrier(2);
@@ -289,7 +294,7 @@ public class PersistentTopicConcurrentTest extends MockedBookKeeperTestCase {
         unsubscriber.start();
 
         counter.await();
-        assertEquals(gotException.get(), false);
+        assertFalse(gotException.get());
     }
 
     // @Test
@@ -301,7 +306,8 @@ public class PersistentTopicConcurrentTest extends MockedBookKeeperTestCase {
                 .setSubType(PulsarApi.CommandSubscribe.SubType.Exclusive).build();
 
         Future<Consumer> f1 = topic.subscribe(serverCnx, cmd.getSubscription(), cmd.getConsumerId(), cmd.getSubType(),
-                0, cmd.getConsumerName(), cmd.getDurable(), null, Collections.emptyMap(), cmd.getReadCompacted(), InitialPosition.Latest);
+                0, cmd.getConsumerName(), cmd.getDurable(), null, Collections.emptyMap(), cmd.getReadCompacted(), InitialPosition.Latest,
+                0 /*avoid reseting cursor*/, false /* replicated */, null);
         f1.get();
 
         final CyclicBarrier barrier = new CyclicBarrier(2);
@@ -347,6 +353,6 @@ public class PersistentTopicConcurrentTest extends MockedBookKeeperTestCase {
         unsubscriber.start();
 
         counter.await();
-        assertEquals(gotException.get(), false);
+        assertFalse(gotException.get());
     }
 }

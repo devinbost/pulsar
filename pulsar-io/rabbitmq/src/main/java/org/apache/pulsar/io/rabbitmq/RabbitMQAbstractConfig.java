@@ -22,10 +22,6 @@ package org.apache.pulsar.io.rabbitmq;
 import com.google.common.base.Preconditions;
 import com.rabbitmq.client.ConnectionFactory;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
 import lombok.experimental.Accessors;
 import org.apache.pulsar.io.core.annotations.FieldDoc;
 
@@ -35,10 +31,6 @@ import java.io.Serializable;
  * Configuration object for all RabbitMQ components.
  */
 @Data
-@Setter
-@Getter
-@EqualsAndHashCode
-@ToString
 @Accessors(chain = true)
 public class RabbitMQAbstractConfig implements Serializable {
 
@@ -71,19 +63,21 @@ public class RabbitMQAbstractConfig implements Serializable {
     @FieldDoc(
         required = false,
         defaultValue = "guest",
+        sensitive = true,
         help = "The username used to authenticate to RabbitMQ")
     private String username = "guest";
 
     @FieldDoc(
         required = false,
         defaultValue = "guest",
+        sensitive = true,
         help = "The password used to authenticate to RabbitMQ")
     private String password = "guest";
 
     @FieldDoc(
-        required = true,
-        defaultValue = "",
-        help = "The RabbitMQ queue name from which messages should be read from or written to")
+            required = false,
+            defaultValue = "",
+            help = "The RabbitMQ queue name from which messages should be read from or written to")
     private String queueName;
 
     @FieldDoc(
@@ -121,7 +115,6 @@ public class RabbitMQAbstractConfig implements Serializable {
         Preconditions.checkNotNull(port, "port property not set.");
         Preconditions.checkNotNull(virtualHost, "virtualHost property not set.");
         Preconditions.checkNotNull(connectionName, "connectionName property not set.");
-        Preconditions.checkNotNull(queueName, "queueName property not set.");
     }
 
     public ConnectionFactory createConnectionFactory() {

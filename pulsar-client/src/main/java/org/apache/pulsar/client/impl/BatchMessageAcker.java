@@ -23,10 +23,20 @@ import java.util.BitSet;
 
 class BatchMessageAcker {
 
+    private BatchMessageAcker() {
+        this.bitSet = new BitSet();
+        this.batchSize = 0;
+    }
+
     static BatchMessageAcker newAcker(int batchSize) {
         BitSet bitSet = new BitSet(batchSize);
         bitSet.set(0, batchSize);
         return new BatchMessageAcker(bitSet, batchSize);
+    }
+
+    // Use the param bitSet as the BatchMessageAcker's bitSet, don't care about the batchSize.
+    static BatchMessageAcker newAcker(BitSet bitSet) {
+        return new BatchMessageAcker(bitSet, -1);
     }
 
     // bitset shared across messages in the same batch.
@@ -53,6 +63,10 @@ class BatchMessageAcker {
         return bitSet.isEmpty();
     }
 
+    public synchronized int getBitSetSize() {
+        return bitSet.size();
+    }
+
     public synchronized boolean ackCumulative(int batchIndex) {
         // +1 since to argument is exclusive
         bitSet.clear(0, batchIndex + 1);
@@ -72,4 +86,12 @@ class BatchMessageAcker {
         return prevBatchCumulativelyAcked;
     }
 
+    @Override
+    public String toString() {
+        return "BatchMessageAcker{" +
+                "batchSize=" + batchSize +
+                ", bitSet=" + bitSet +
+                ", prevBatchCumulativelyAcked=" + prevBatchCumulativelyAcked +
+                '}';
+    }
 }

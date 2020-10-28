@@ -32,9 +32,6 @@ using namespace boost::posix_time;
 using boost::posix_time::milliseconds;
 using boost::posix_time::seconds;
 
-ptime now();
-int64_t currentTimeMillis();
-
 class HandlerBase;
 typedef std::weak_ptr<HandlerBase> HandlerBaseWeakPtr;
 typedef std::shared_ptr<HandlerBase> HandlerBasePtr;
@@ -108,6 +105,7 @@ class HandlerBase {
 
     State state_;
     Backoff backoff_;
+    uint64_t epoch_;
 
    private:
     DeadlineTimerPtr timer_;

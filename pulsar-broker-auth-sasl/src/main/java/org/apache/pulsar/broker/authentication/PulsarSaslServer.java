@@ -76,8 +76,8 @@ public class PulsarSaslServer {
                 int indexOf = servicePrincipalNameAndHostname.indexOf("/");
 
                 // e.g. serviceHostnameAndKerbDomain := "myhost.foo.com@EXAMPLE.COM"
-                final String serviceHostnameAndKerbDomain = servicePrincipalNameAndHostname.substring(indexOf + 1,
-                    servicePrincipalNameAndHostname.length());
+                final String serviceHostnameAndKerbDomain = servicePrincipalNameAndHostname.substring(indexOf + 1
+                );
                 int indexOfAt = serviceHostnameAndKerbDomain.indexOf("@");
 
                 // Handle Kerberos Service as well as User Principal Names
@@ -186,18 +186,6 @@ public class PulsarSaslServer {
             ac.setAuthorized(true);
             log.info("Successfully authenticated client: authenticationID: {};  authorizationID: {}.",
                 authenticationID, authorizationID);
-
-            KerberosName kerberosName = new KerberosName(authenticationID);
-            try {
-                StringBuilder userNameBuilder = new StringBuilder(kerberosName.getShortName());
-                userNameBuilder.append("/").append(kerberosName.getHostName());
-                userNameBuilder.append("@").append(kerberosName.getRealm());
-
-                log.info("Setting authorizedID: {} ", userNameBuilder);
-                ac.setAuthorizedID(userNameBuilder.toString());
-            } catch (IOException e) {
-                log.error("Failed to set name based on Kerberos authentication rules.");
-            }
         }
     }
 }

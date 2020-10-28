@@ -19,17 +19,18 @@
 package org.apache.pulsar.common.naming;
 
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertNull;
 import static org.testng.Assert.fail;
 
 import org.apache.pulsar.common.util.Codec;
 import org.testng.annotations.Test;
 
-@Test
 public class TopicNameTest {
 
+    @SuppressWarnings("deprecation")
     @Test
-    void topic() {
+    public void topic() {
         try {
             TopicName.get("://tenant.namespace:topic").getNamespace();
             fail("Should have thrown exception");
@@ -51,8 +52,8 @@ public class TopicNameTest {
         assertEquals(TopicName.get("persistent://tenant/cluster/namespace/topic").toString(),
                 "persistent://tenant/cluster/namespace/topic");
 
-        assertFalse(TopicName.get("persistent://tenant/cluster/namespace/topic")
-                .equals("persistent://tenant/cluster/namespace/topic"));
+        assertNotEquals(TopicName.get("persistent://tenant/cluster/namespace/topic"),
+            "persistent://tenant/cluster/namespace/topic");
 
         assertEquals(TopicName.get("persistent://tenant/cluster/namespace/topic").getDomain(),
                 TopicDomain.persistent);
@@ -198,6 +199,11 @@ public class TopicNameTest {
         assertEquals(topicName.getPartitionIndex(), -1);
 
         assertEquals(TopicName.getPartitionIndex("persistent://myprop/mycolo/myns/mytopic-partition-4"), 4);
+
+        // NOTE: Following behavior is not right actually, but for the backward compatibility, it shouldn't be changed
+        assertEquals(TopicName.getPartitionIndex("mytopic-partition--1"), 1);
+        assertEquals(TopicName.getPartitionIndex("mytopic-partition-00"), 0);
+        assertEquals(TopicName.getPartitionIndex("mytopic-partition-012"), 12);
     }
 
     @Test
@@ -215,6 +221,7 @@ public class TopicNameTest {
         assertEquals(name.getPersistenceNamingEncoding(), "prop/colo/ns/persistent/" + encodedName);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testTopicNameWithoutCluster() throws Exception {
         TopicName topicName = TopicName.get("persistent://tenant/namespace/topic");
@@ -229,7 +236,7 @@ public class TopicNameTest {
         assertEquals(topicName.toString(), "persistent://tenant/namespace/topic");
         assertEquals(topicName.getDomain(), TopicDomain.persistent);
         assertEquals(topicName.getTenant(), "tenant");
-        assertEquals(topicName.getCluster(), null);
+        assertNull(topicName.getCluster());
         assertEquals(topicName.getNamespacePortion(), "namespace");
         assertEquals(topicName.getNamespace(), "tenant/namespace");
         assertEquals(topicName.getLocalName(), "topic");

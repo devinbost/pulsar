@@ -93,21 +93,30 @@ public class Bookies extends AdminResource {
     public void deleteBookieRackInfo(@PathParam("bookie") String bookieAddress) throws Exception {
         validateSuperUserAccess();
 
-        BookiesRackConfiguration racks = localZkCache()
-                .getData(ZkBookieRackAffinityMapping.BOOKIE_INFO_ROOT_PATH, (key, content) -> ObjectMapperFactory
-                        .getThreadLocal().readValue(content, BookiesRackConfiguration.class))
-                .orElse(new BookiesRackConfiguration());
 
-        if (!racks.removeBookie(bookieAddress)) {
-            throw new RestException(Status.NOT_FOUND, "Bookie address not found: " + bookieAddress);
+        Optional<Entry<BookiesRackConfiguration, Stat>> entry = localZkCache()
+            .getEntry(ZkBookieRackAffinityMapping.BOOKIE_INFO_ROOT_PATH, (key, content) -> ObjectMapperFactory
+                .getThreadLocal().readValue(content, BookiesRackConfiguration.class));
+
+        if (entry.isPresent()) {
+            BookiesRackConfiguration racks = entry.get().getKey();
+            if (!racks.removeBookie(bookieAddress)) {
+                throw new RestException(Status.NOT_FOUND, "Bookie address not found: " + bookieAddress);
+            } else {
+                localZk().setData(ZkBookieRackAffinityMapping.BOOKIE_INFO_ROOT_PATH,
+                    jsonMapper().writeValueAsBytes(racks),
+                    entry.get().getValue().getVersion());
+                log.info("Removed {} from rack mapping info", bookieAddress);
+            }
+        } else {
+            throw new RestException(Status.NOT_FOUND, "Bookie rack placement info is not found");
         }
 
-        log.info("Removed {} from rack mapping info", bookieAddress);
     }
 
     @POST
     @Path("/racks-info/{bookie}")
-    @ApiOperation(value = "Updates the rack placement information for a specific bookie in the cluster")
+    @ApiOperation(value = "Updates the rack placement information for a specific bookie in the cluster (note. bookie address format:`address:port`)")
     @ApiResponses(value = { @ApiResponse(code = 403, message = "Don't have admin permission") })
     public void updateBookieRackInfo(@PathParam("bookie") String bookieAddress, @QueryParam("group") String group,
             BookieInfo bookieInfo) throws Exception {

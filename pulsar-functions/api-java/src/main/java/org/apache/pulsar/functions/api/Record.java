@@ -18,6 +18,9 @@
  */
 package org.apache.pulsar.functions.api;
 
+import org.apache.pulsar.client.api.Message;
+import org.apache.pulsar.client.api.Schema;
+
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
@@ -39,6 +42,10 @@ public interface Record<T> {
      */
     default Optional<String> getKey() {
         return Optional.empty();
+    }
+
+    default Schema<T> getSchema() {
+        return null;
     }
 
     /**
@@ -102,6 +109,10 @@ public interface Record<T> {
      * @return The topic this message should be written to
      */
     default Optional<String> getDestinationTopic() {
+        return Optional.empty();
+    }
+
+    default Optional<Message<T>> getMessage() {
         return Optional.empty();
     }
 }

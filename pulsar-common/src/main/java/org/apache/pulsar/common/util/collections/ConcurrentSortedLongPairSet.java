@@ -19,6 +19,7 @@
 package org.apache.pulsar.common.util.collections;
 
 import java.util.NavigableMap;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -31,20 +32,19 @@ import org.apache.pulsar.common.util.collections.ConcurrentLongPairSet.LongPairC
 
 /**
  * Sorted concurrent {@link LongPairSet} which is not fully accurate in sorting.
- * 
+ *
  * {@link ConcurrentSortedLongPairSet} creates separate {@link ConcurrentLongPairSet} for unique first-key of
  * inserted item. So, it can iterate over all items by sorting on item's first key. However, item's second key will not
  * be sorted. eg:
- * 
+ *
  * <pre>
  *  insert: (1,2), (1,4), (2,1), (1,5), (2,6)
  *  while iterating set will first read all the entries for items whose first-key=1 and then first-key=2.
  *  output: (1,4), (1,5), (1,2), (2,6), (2,1)
  * </pre>
- * 
- * This map can be expensive and not recommended if set has to store large number of unique item.first's key because set
- * has to create that many {@link ConcurrentLongPairSet} objects
  *
+ * <p>This map can be expensive and not recommended if set has to store large number of unique item.first's key
+ * because set has to create that many {@link ConcurrentLongPairSet} objects.
  */
 public class ConcurrentSortedLongPairSet implements LongPairSet {
 
@@ -131,17 +131,13 @@ public class ConcurrentSortedLongPairSet implements LongPairSet {
 
     @Override
     public <T> Set<T> items(int numberOfItems, LongPairFunction<T> longPairConverter) {
-        Set<T> items = new TreeSet<>();
-        AtomicInteger count = new AtomicInteger(0);
+        NavigableSet<T> items = new TreeSet<>();
         for (Long item1 : longPairSets.navigableKeySet()) {
-            if (count.get() >= numberOfItems) {// already found set of positions
-                break;
-            }
             ConcurrentLongPairSet messagesToReplay = longPairSets.get(item1);
             messagesToReplay.forEach((i1, i2) -> {
-                if (count.get() < numberOfItems) {
-                    items.add(longPairConverter.apply(i1, i2));
-                    count.incrementAndGet();
+                items.add(longPairConverter.apply(i1, i2));
+                if (items.size() > numberOfItems) {
+                    items.pollLast();
                 }
             });
         }

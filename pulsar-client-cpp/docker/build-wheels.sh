@@ -29,10 +29,10 @@ cd $ROOT_DIR
 PYTHON_VERSIONS=(
    '2.7 cp27-cp27mu'
    '2.7 cp27-cp27m'
-   '3.4 cp34-cp34m'
    '3.5 cp35-cp35m'
    '3.6 cp36-cp36m'
    '3.7 cp37-cp37m'
+   '3.8 cp38-cp38'
 )
 
 function contains() {
@@ -69,8 +69,14 @@ for line in "${PYTHON_VERSIONS[@]}"; do
     PYTHON_SPEC=${PY[1]}
     echo "--------- Build Python wheel for $PYTHON_VERSION -- $PYTHON_SPEC"
 
-    IMAGE_NAME=$BUILD_IMAGE_NAME:manylinux-$PYTHON_SPEC
+    IMAGE=$BUILD_IMAGE_NAME:manylinux-$PYTHON_SPEC
 
-    echo "Using image: $IMAGE_NAME"
-    docker run -i -v $PWD:/pulsar $IMAGE_NAME /pulsar/pulsar-client-cpp/docker/build-wheel-file-within-docker.sh
+    echo "Using image: $IMAGE"
+
+    VOLUME_OPTION=${VOLUME_OPTION:-"-v $ROOT_DIR:/pulsar"}
+    COMMAND="/pulsar/pulsar-client-cpp/docker/build-wheel-file-within-docker.sh"
+    DOCKER_CMD="docker run -i ${VOLUME_OPTION} ${IMAGE}"
+
+    $DOCKER_CMD bash -c "${COMMAND}"
+
 done

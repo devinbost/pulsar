@@ -102,12 +102,13 @@ RUN curl -L -O https://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz && \
     rm -rf /libtool-2.4.6.tar.gz /libtool-2.4.6
 
 # Compile log4cxx
-RUN git clone https://github.com/apache/logging-log4cxx.git && \
-    cd logging-log4cxx && \
+RUN curl -O -L https://github.com/apache/logging-log4cxx/archive/v0.11.0.tar.gz && \
+    tar xvfz v0.11.0.tar.gz && \
+    cd logging-log4cxx-0.11.0 && \
     ./autogen.sh && \
     CXXFLAGS=-fPIC ./configure && \
     make && make install && \
-    rm -rf /logging-log4cxx
+    rm -rf /v0.11.0.tar.gz /logging-log4cxx-0.11.0
 
 # Compile expat
 RUN curl -O -L  https://github.com/libexpat/libexpat/archive/R_2_2_0.tar.gz && \
@@ -148,6 +149,14 @@ RUN curl -O -L https://github.com/facebook/zstd/releases/download/v1.3.7/zstd-1.
     CFLAGS="-fPIC -O3" make -j8 && \
     make install && \
     rm -rf /zstd-1.3.7 /zstd-1.3.7.tar.gz
+
+# Snappy
+RUN curl -O -L https://github.com/google/snappy/releases/download/1.1.3/snappy-1.1.3.tar.gz && \
+    tar xvfz snappy-1.1.3.tar.gz && \
+    cd snappy-1.1.3 && \
+    CXXFLAGS="-fPIC -O3" ./configure && \
+    make && make install && \
+    rm -rf /snappy-1.1.3 /snappy-1.1.3.tar.gz
 
 RUN pip install twine
 RUN pip install fastavro

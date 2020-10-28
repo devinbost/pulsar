@@ -20,90 +20,115 @@
 package conf
 
 import (
+	"encoding/json"
 	"flag"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"time"
 
-	"github.com/apache/pulsar/pulsar-function-go/log"
+	log "github.com/apache/pulsar/pulsar-function-go/logutil"
 	"gopkg.in/yaml.v2"
 )
 
-const ConfigPath = "github.com/apache/pulsar/pulsar-function-go/conf/conf.yaml"
+const ConfigPath = "conf/conf.yaml"
 
 type Conf struct {
-	PulsarServiceURL string        `yaml:"pulsarServiceURL"`
-	InstanceID       int           `yaml:"instanceID"`
-	FuncID           string        `yaml:"funcID"`
-	FuncVersion      string        `yaml:"funcVersion"`
-	MaxBufTuples     int           `yaml:"maxBufTuples"`
-	Port             int           `yaml:"port"`
-	ClusterName      string        `yaml:"clusterName"`
-	KillAfterIdleMs  time.Duration `yaml:"killAfterIdleMs"`
+	PulsarServiceURL string        `json:"pulsarServiceURL" yaml:"pulsarServiceURL"`
+	InstanceID       int           `json:"instanceID" yaml:"instanceID"`
+	FuncID           string        `json:"funcID" yaml:"funcID"`
+	FuncVersion      string        `json:"funcVersion" yaml:"funcVersion"`
+	MaxBufTuples     int           `json:"maxBufTuples" yaml:"maxBufTuples"`
+	Port             int           `json:"port" yaml:"port"`
+	ClusterName      string        `json:"clusterName" yaml:"clusterName"`
+	KillAfterIdleMs  time.Duration `json:"killAfterIdleMs" yaml:"killAfterIdleMs"`
 	// function details config
-	Tenant               string `yaml:"tenant"`
-	NameSpace            string `yaml:"nameSpace"`
-	Name                 string `yaml:"name"`
-	LogTopic             string `yaml:"logTopic"`
-	ProcessingGuarantees int32  `yaml:"processingGuarantees"`
-	SecretsMap           string `yaml:"secretsMap"`
-	Runtime              int32  `yaml:"runtime"`
-	AutoACK              bool   `yaml:"autoAck"`
-	Parallelism          int32  `yaml:"parallelism"`
+	Tenant               string `json:"tenant" yaml:"tenant"`
+	NameSpace            string `json:"nameSpace" yaml:"nameSpace"`
+	Name                 string `json:"name" yaml:"name"`
+	LogTopic             string `json:"logTopic" yaml:"logTopic"`
+	ProcessingGuarantees int32  `json:"processingGuarantees" yaml:"processingGuarantees"`
+	SecretsMap           string `json:"secretsMap" yaml:"secretsMap"`
+	Runtime              int32  `json:"runtime" yaml:"runtime"`
+	AutoACK              bool   `json:"autoAck" yaml:"autoAck"`
+	Parallelism          int32  `json:"parallelism" yaml:"parallelism"`
 	//source config
-	SubscriptionType    int32  `yaml:"subscriptionType"`
-	TimeoutMs           uint64 `yaml:"timeoutMs"`
-	SubscriptionName    string `yaml:"subscriptionName"`
-	CleanupSubscription bool   `yaml:"cleanupSubscription"`
+	SubscriptionType    int32  `json:"subscriptionType" yaml:"subscriptionType"`
+	TimeoutMs           uint64 `json:"timeoutMs" yaml:"timeoutMs"`
+	SubscriptionName    string `json:"subscriptionName" yaml:"subscriptionName"`
+	CleanupSubscription bool   `json:"cleanupSubscription"  yaml:"cleanupSubscription"`
 	//source input specs
-	SourceSpecTopic            string `yaml:"sourceSpecsTopic"`
-	SourceSchemaType           string `yaml:"sourceSchemaType"`
-	IsRegexPatternSubscription bool   `yaml:"isRegexPatternSubscription"`
-	ReceiverQueueSize          int32  `yaml:"receiverQueueSize"`
+	SourceSpecTopic            string `json:"sourceSpecsTopic" yaml:"sourceSpecsTopic"`
+	SourceSchemaType           string `json:"sourceSchemaType" yaml:"sourceSchemaType"`
+	IsRegexPatternSubscription bool   `json:"isRegexPatternSubscription" yaml:"isRegexPatternSubscription"`
+	ReceiverQueueSize          int32  `json:"receiverQueueSize" yaml:"receiverQueueSize"`
 	//sink spec config
-	SinkSpecTopic  string `yaml:"sinkSpecsTopic"`
-	SinkSchemaType string `yaml:"sinkSchemaType"`
+	SinkSpecTopic  string `json:"sinkSpecsTopic" yaml:"sinkSpecsTopic"`
+	SinkSchemaType string `json:"sinkSchemaType" yaml:"sinkSchemaType"`
 	//resources config
-	Cpu  float64 `yaml:"cpu"`
-	Ram  int64   `yaml:"ram"`
-	Disk int64   `yaml:"disk"`
+	Cpu  float64 `json:"cpu" yaml:"cpu"`
+	Ram  int64   `json:"ram" yaml:"ram"`
+	Disk int64   `json:"disk" yaml:"disk"`
 	//retryDetails config
-	MaxMessageRetries int32  `yaml:"maxMessageRetries"`
-	DeadLetterTopic   string `yaml:"deadLetterTopic"`
+	MaxMessageRetries           int32  `json:"maxMessageRetries" yaml:"maxMessageRetries"`
+	DeadLetterTopic             string `json:"deadLetterTopic" yaml:"deadLetterTopic"`
+	ExpectedHealthCheckInterval int32  `json:"expectedHealthCheckInterval" yaml:"expectedHealthCheckInterval"`
+	UserConfig                  string `json:"userConfig" yaml:"userConfig"`
 }
 
-var opts string
+var (
+	help         bool
+	confFilePath string
+	confContent  string
+)
 
 func (c *Conf) GetConf() *Conf {
 	flag.Parse()
 
-	yamlFile, err := ioutil.ReadFile(opts)
-	if err != nil {
-		log.Errorf("not found conf file, err:%s", err.Error())
+	if help {
+		flag.Usage()
+	}
+
+	if confContent == "" && confFilePath == "" {
+		log.Errorf("no yaml file or conf content provided")
 		return nil
 	}
-	err = yaml.Unmarshal(yamlFile, c)
-	if err != nil {
-		log.Errorf("unmarshal yaml file error:%s", err.Error())
-		return nil
+
+	if confFilePath != "" {
+		yamlFile, err := ioutil.ReadFile(confFilePath)
+		if err == nil {
+			err = yaml.Unmarshal(yamlFile, c)
+			if err != nil {
+				log.Errorf("unmarshal yaml file error:%s", err.Error())
+				return nil
+			}
+		} else if os.IsNotExist(err) && confContent == "" {
+			log.Errorf("conf file not found, no config content provided, err:%s", err.Error())
+			return nil
+		} else if !os.IsNotExist(err) {
+			log.Errorf("load conf file failed, err:%s", err.Error())
+			return nil
+		}
 	}
+
+	if confContent != "" {
+		err := json.Unmarshal([]byte(confContent), c)
+		if err != nil {
+			log.Errorf("unmarshal config content error:%s", err.Error())
+			return nil
+		}
+	}
+
 	return c
 }
 
 func init() {
-	var homeDir string
-	usr, err := user.Current()
-	if err == nil {
-		homeDir = usr.HomeDir
+	var defaultPath string
+	if err := os.Chdir("../"); err == nil {
+		defaultPath = ConfigPath
 	}
+	log.Infof("The default config file path is: %s", defaultPath)
 
-	// Fall back to standard HOME environment variable that works
-	// for most POSIX OSes if the directory from the Go standard
-	// lib failed.
-	if err != nil || homeDir == "" {
-		homeDir = os.Getenv("HOME")
-	}
-	defaultPath := homeDir + "/" + ConfigPath
-	flag.StringVar(&opts, "instance-conf", defaultPath, "config conf.yml filepath")
+	flag.BoolVar(&help, "help", false, "print help cmd")
+	flag.StringVar(&confFilePath, "instance-conf-path", defaultPath, "config conf.yml filepath")
+	flag.StringVar(&confContent, "instance-conf", "", "the string content of Conf struct")
 }

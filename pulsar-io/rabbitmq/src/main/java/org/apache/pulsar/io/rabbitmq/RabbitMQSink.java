@@ -23,6 +23,7 @@ import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.functions.api.Record;
 import org.apache.pulsar.io.core.Sink;
 import org.apache.pulsar.io.core.SinkContext;
@@ -30,7 +31,6 @@ import org.apache.pulsar.io.core.annotations.Connector;
 import org.apache.pulsar.io.core.annotations.IOType;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -44,13 +44,13 @@ import java.util.Map;
     configClass = RabbitMQSinkConfig.class
 )
 @Slf4j
-public class RabbitMQSink<T> implements Sink<T> {
+public class RabbitMQSink implements Sink<byte[]> {
 
     private Connection rabbitMQConnection;
     private Channel rabbitMQChannel;
     private RabbitMQSinkConfig rabbitMQSinkConfig;
     private String exchangeName;
-    private String routingKey;
+    private String defaultRoutingKey;
 
     @Override
     public void open(Map<String, Object> config, SinkContext sinkContext) throws Exception {
@@ -65,21 +65,26 @@ public class RabbitMQSink<T> implements Sink<T> {
         );
 
         exchangeName = rabbitMQSinkConfig.getExchangeName();
-        routingKey = rabbitMQSinkConfig.getRoutingKey();
+        defaultRoutingKey = rabbitMQSinkConfig.getRoutingKey();
+        String exchangeType = rabbitMQSinkConfig.getExchangeType();
 
         rabbitMQChannel = rabbitMQConnection.createChannel();
-
-        // several clients share a queue
-        rabbitMQChannel.exchangeDeclare(exchangeName, BuiltinExchangeType.DIRECT, true);
-        rabbitMQChannel.queueDeclare(rabbitMQSinkConfig.getQueueName(), true, false, false, null);
-        rabbitMQChannel.queueBind(rabbitMQSinkConfig.getQueueName(), exchangeName, routingKey);
+        String queueName = rabbitMQSinkConfig.getQueueName();
+        if (StringUtils.isNotEmpty(queueName)) {
+            rabbitMQChannel.exchangeDeclare(exchangeName, BuiltinExchangeType.DIRECT, true);
+            rabbitMQChannel.queueDeclare(rabbitMQSinkConfig.getQueueName(), true, false, false, null);
+            rabbitMQChannel.queueBind(rabbitMQSinkConfig.getQueueName(), exchangeName, defaultRoutingKey);
+        } else {
+            rabbitMQChannel.exchangeDeclare(exchangeName, exchangeType, true);
+        }
     }
 
     @Override
-    public void write(Record<T> record) {
-        byte[] value = toBytes(record.getValue());
+    public void write(Record<byte[]> record) {
+        byte[] value = record.getValue();
         try {
-            rabbitMQChannel.basicPublish(exchangeName, routingKey, null, value);
+            String routingKey = record.getProperties().get("routingKey");
+            rabbitMQChannel.basicPublish(exchangeName, StringUtils.isEmpty(routingKey) ? defaultRoutingKey : routingKey, null, value);
             record.ack();
         } catch (IOException e) {
             record.fail();
@@ -95,18 +100,5 @@ public class RabbitMQSink<T> implements Sink<T> {
         if (rabbitMQConnection != null) {
             rabbitMQConnection.close();
         }
-    }
-
-    private byte[] toBytes(Object obj) {
-        final byte[] result;
-        if (obj instanceof String) {
-            String s = (String) obj;
-            result = s.getBytes(StandardCharsets.UTF_8);
-        } else if (obj instanceof byte[]) {
-            result = (byte[]) obj;
-        } else {
-            throw new IllegalArgumentException("The value of the record must be String or Bytes.");
-        }
-        return result;
     }
 }

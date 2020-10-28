@@ -27,11 +27,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 
 import javax.naming.AuthenticationException;
 
-import org.apache.bookkeeper.test.PortManager;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.authentication.AuthenticationDataSource;
 import org.apache.pulsar.broker.authentication.AuthenticationProvider;
@@ -142,14 +142,9 @@ public class ProxyRolesEnforcementTest extends ProducerConsumerBase {
         }
     }
 
-    private int webServicePort;
-    private int servicePort;
-
     @BeforeMethod
     @Override
     protected void setup() throws Exception {
-        webServicePort = PortManager.nextFreePort();
-        servicePort = PortManager.nextFreePort();
         conf.setAuthenticationEnabled(true);
         conf.setAuthorizationEnabled(true);
         conf.setBrokerClientAuthenticationPlugin(BasicAuthentication.class.getName());
@@ -181,12 +176,12 @@ public class ProxyRolesEnforcementTest extends ProducerConsumerBase {
     }
 
     @Test
-    void testIncorrectRoles() throws Exception {
+    public void testIncorrectRoles() throws Exception {
         log.info("-- Starting {} test --", methodName);
 
         // Step 1: Create Admin Client
         createAdminClient();
-        final String proxyServiceUrl = "pulsar://localhost:" + servicePort;
+
         // create a client which connects to proxy and pass authData
         String namespaceName = "my-property/my-ns";
         String topicName = "persistent://my-property/my-ns/my-topic1";
@@ -200,22 +195,22 @@ public class ProxyRolesEnforcementTest extends ProducerConsumerBase {
                 Sets.newHashSet(AuthAction.consume, AuthAction.produce));
 
         // Step 2: Try to use proxy Client as a normal Client - expect exception
-        PulsarClient proxyClient = createPulsarClient("pulsar://localhost:" + BROKER_PORT, proxyAuthParams);
-        boolean exceptionOccured = false;
+        PulsarClient proxyClient = createPulsarClient(pulsar.getBrokerServiceUrl(), proxyAuthParams);
+        boolean exceptionOccurred = false;
         try {
             proxyClient.newConsumer().topic(topicName).subscriptionName(subscriptionName).subscribe();
         } catch (Exception ex) {
-            exceptionOccured = true;
+            exceptionOccurred = true;
         }
-        Assert.assertTrue(exceptionOccured);
+        Assert.assertTrue(exceptionOccurred);
 
         // Step 3: Run Pulsar Proxy and pass proxy params as client params - expect exception
         ProxyConfiguration proxyConfig = new ProxyConfiguration();
         proxyConfig.setAuthenticationEnabled(true);
 
-        proxyConfig.setServicePort(servicePort);
-        proxyConfig.setWebServicePort(webServicePort);
-        proxyConfig.setBrokerServiceURL("pulsar://localhost:" + BROKER_PORT);
+        proxyConfig.setServicePort(Optional.of(0));
+        proxyConfig.setWebServicePort(Optional.of(0));
+        proxyConfig.setBrokerServiceURL(pulsar.getBrokerServiceUrl());
 
         proxyConfig.setBrokerClientAuthenticationPlugin(BasicAuthentication.class.getName());
         proxyConfig.setBrokerClientAuthenticationParameters(proxyAuthParams);
@@ -226,20 +221,20 @@ public class ProxyRolesEnforcementTest extends ProducerConsumerBase {
         ProxyService proxyService = new ProxyService(proxyConfig,
                                                      new AuthenticationService(
                                                              PulsarConfigurationLoader.convertFrom(proxyConfig)));
-
         proxyService.start();
-        proxyClient = createPulsarClient(proxyServiceUrl, proxyAuthParams);
-        exceptionOccured = false;
+
+        proxyClient = createPulsarClient(proxyService.getServiceUrl(), proxyAuthParams);
+        exceptionOccurred = false;
         try {
             proxyClient.newConsumer().topic(topicName).subscriptionName(subscriptionName).subscribe();
         } catch (Exception ex) {
-            exceptionOccured = true;
+            exceptionOccurred = true;
         }
 
-        Assert.assertTrue(exceptionOccured);
+        Assert.assertTrue(exceptionOccurred);
 
         // Step 4: Pass correct client params
-        proxyClient = createPulsarClient(proxyServiceUrl, clientAuthParams);
+        proxyClient = createPulsarClient(proxyService.getServiceUrl(), clientAuthParams);
         proxyClient.newConsumer().topic(topicName).subscriptionName(subscriptionName).subscribe();
         proxyClient.close();
         proxyService.close();

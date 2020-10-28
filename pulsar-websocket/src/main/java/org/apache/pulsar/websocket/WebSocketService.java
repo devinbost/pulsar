@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import javax.servlet.ServletException;
 import javax.websocket.DeploymentException;
 
+import lombok.Setter;
 import org.apache.bookkeeper.common.util.OrderedScheduler;
 import org.apache.pulsar.broker.PulsarServerException;
 import org.apache.pulsar.broker.ServiceConfiguration;
@@ -61,8 +62,6 @@ import io.netty.util.concurrent.DefaultThreadFactory;
  */
 public class WebSocketService implements Closeable {
 
-    public static final int MaxTextFrameSize = 1024 * 1024;
-
     AuthenticationService authenticationService;
     AuthorizationService authorizationService;
     PulsarClient pulsarClient;
@@ -77,6 +76,7 @@ public class WebSocketService implements Closeable {
     private ServiceConfiguration config;
     private ConfigurationCacheService configurationCacheService;
 
+    @Setter
     private ClusterData localCluster;
     private final ConcurrentOpenHashMap<String, ConcurrentOpenHashSet<ProducerHandler>> topicProducerMap;
     private final ConcurrentOpenHashMap<String, ConcurrentOpenHashSet<ConsumerHandler>> topicConsumerMap;
@@ -103,7 +103,8 @@ public class WebSocketService implements Closeable {
             this.globalZkCache = new GlobalZooKeeperCache(getZooKeeperClientFactory(),
                     (int) config.getZooKeeperSessionTimeoutMillis(),
                     (int) TimeUnit.MILLISECONDS.toSeconds(config.getZooKeeperSessionTimeoutMillis()),
-                    config.getConfigurationStoreServers(), this.orderedExecutor, this.executor);
+                    config.getConfigurationStoreServers(), this.orderedExecutor, this.executor,
+                    config.getZooKeeperCacheExpirySeconds());
             try {
                 this.globalZkCache.start();
             } catch (IOException e) {
@@ -246,10 +247,7 @@ public class WebSocketService implements Closeable {
     public boolean isAuthenticationEnabled() {
         if (this.config == null)
             return false;
-        // TODO: isSaslAuthentication used to bypass web resource check.
-        //  will remove it after implementation the support.
-        //  github issue #3653 {@link: https://github.com/apache/pulsar/issues/3653}
-        return this.config.isAuthenticationEnabled() && !this.config.isSaslAuthentication();
+        return this.config.isAuthenticationEnabled();
     }
 
     public boolean isAuthorizationEnabled() {

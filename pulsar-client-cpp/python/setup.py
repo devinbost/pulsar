@@ -19,8 +19,9 @@
 
 from setuptools import setup
 from distutils.core import Extension
+from distutils.util import strtobool
+from os import environ
 import subprocess
-import sys
 
 from distutils.command import build_ext
 
@@ -28,23 +29,32 @@ import xml.etree.ElementTree as ET
 from os.path import dirname, realpath, join
 
 def get_version():
+    use_full_pom_name = strtobool(environ.get('USE_FULL_POM_NAME', 'False'))
+
     # Get the pulsar version from pom.xml
     TOP_LEVEL_PATH = dirname(dirname(dirname(realpath(__file__))))
     POM_PATH = join(TOP_LEVEL_PATH, 'pom.xml')
     root = ET.XML(open(POM_PATH).read())
     version = root.find('{http://maven.apache.org/POM/4.0.0}version').text.strip()
 
-    # Strip the '-incubating' suffix, since it prevents the packages
-    # from being uploaded into PyPI
-    return version.split('-')[0]
+    if use_full_pom_name:
+        return version
+    else:
+        # Strip the '-incubating' suffix, since it prevents the packages
+        # from being uploaded into PyPI
+        return version.split('-')[0]
 
+
+def get_name():
+    postfix = environ.get('NAME_POSTFIX', '')
+    base = 'pulsar-client'
+    return base + postfix
 
 VERSION = get_version()
+NAME = get_name()
 
-if sys.version_info[0] == 2:
-    PY2 = True
-else:
-    PY2 = False
+print(VERSION)
+print(NAME)
 
 # This is a workaround to have setuptools to include
 # the already compiled _pulsar.so library
@@ -62,23 +72,21 @@ class my_build_ext(build_ext.build_ext):
 
 
 dependencies = [
-    'fastavro',
+    'fastavro==0.24.0',
     'grpcio',
     'protobuf>=3.6.1',
     'six',
+    'certifi',
+    'enum34>=1.1.9; python_version < "3.4"',
 
     # functions dependencies
-    "apache-bookkeeper-client",
+    "apache-bookkeeper-client>=4.9.2",
     "prometheus_client",
     "ratelimit"
 ]
 
-if PY2:
-    # Python 2 compat dependencies
-    dependencies += ['enum34']
-
 setup(
-    name="pulsar-client",
+    name=NAME,
     version=VERSION,
     packages=['pulsar', 'pulsar.schema', 'pulsar.functions'],
     cmdclass={'build_ext': my_build_ext},

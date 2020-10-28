@@ -19,6 +19,7 @@
 package org.apache.pulsar.admin.cli;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.pulsar.client.admin.PulsarAdminException;
@@ -109,7 +110,7 @@ abstract class CliCommand {
             return new MessageIdImpl(Long.parseLong(messageId[0]), Long.parseLong(messageId[1]), -1);
         } catch (Exception e) {
             throw new PulsarAdminException(
-                    "Invalid reset-position (must be in format: ledgerId:entryId) value " + resetMessageIdStr);
+                    "Invalid message id (must be in format: ledgerId:entryId) value " + resetMessageIdStr);
         }
     }
 
@@ -171,15 +172,13 @@ abstract class CliCommand {
 
     <T> void print(List<T> items) {
         for (T item : items) {
-            System.out.println(item);
+            print(item);
         }
     }
 
-    <T> void printList(T item) {
-        try {
-            System.out.println(writer.writeValueAsString(item));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+    <K,V> void print(Map<K,V> items) {
+        for(Map.Entry<K,V> entry : items.entrySet()) {
+            print(entry.getKey() + "    " + entry.getValue());
         }
     }
 

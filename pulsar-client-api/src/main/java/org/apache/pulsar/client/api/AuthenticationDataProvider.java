@@ -20,6 +20,7 @@ package org.apache.pulsar.client.api;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import java.io.InputStream;
 import java.io.Serializable;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
@@ -31,7 +32,7 @@ import javax.naming.AuthenticationException;
 import org.apache.pulsar.common.api.AuthData;
 
 /**
- * Interface for accessing data which are used in variety of authentication schemes on client side
+ * Interface for accessing data which are used in variety of authentication schemes on client side.
  */
 public interface AuthenticationDataProvider extends Serializable {
     /*
@@ -63,6 +64,24 @@ public interface AuthenticationDataProvider extends Serializable {
         return null;
     }
 
+    /**
+     *
+     * @return an input-stream of the trust store, or null if the trust-store provided at
+     *         {@link ClientConfigurationData#getTlsTrustStorePath()}
+     */
+    default InputStream getTlsTrustStoreStream() {
+        return null;
+    }
+
+    /**
+     * Used for TLS authentication with keystore type.
+     *
+     * @return a KeyStoreParams for the client certificate chain, or null if the data are not available
+     */
+    default KeyStoreParams getTlsKeyStoreParams() {
+        return null;
+    }
+
     /*
      * HTTP
      */
@@ -78,7 +97,7 @@ public interface AuthenticationDataProvider extends Serializable {
 
     /**
      *
-     * @return a authentication scheme, or <code>null<c/ode> if the request will not be authenticated
+     * @return a authentication scheme, or {@code null} if the request will not be authenticated.
      */
     default String getHttpAuthType() {
         return null;
@@ -88,7 +107,7 @@ public interface AuthenticationDataProvider extends Serializable {
      *
      * @return an enumeration of all the header names
      */
-    default Set<Map.Entry<String, String>> getHttpHeaders() {
+    default Set<Map.Entry<String, String>> getHttpHeaders() throws Exception {
         return null;
     }
 
@@ -118,7 +137,7 @@ public interface AuthenticationDataProvider extends Serializable {
      * then returns null if authentication has completed;
      * returns authenticated data back to server side, if authentication has not completed.
      *
-     * Mainly used for mutual authentication like sasl.
+     * <p>Mainly used for mutual authentication like sasl.
      */
     default AuthData authenticate(AuthData data) throws AuthenticationException {
         byte[] bytes = (hasDataFromCommand() ? this.getCommandData() : "").getBytes(UTF_8);

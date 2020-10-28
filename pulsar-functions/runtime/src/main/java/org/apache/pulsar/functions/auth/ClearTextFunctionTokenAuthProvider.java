@@ -21,6 +21,7 @@ package org.apache.pulsar.functions.auth;
 import org.apache.pulsar.broker.authentication.AuthenticationDataSource;
 import org.apache.pulsar.client.impl.auth.AuthenticationToken;
 import org.apache.pulsar.functions.instance.AuthenticationConfig;
+import org.apache.pulsar.functions.proto.Function;
 
 import java.util.Optional;
 
@@ -28,13 +29,19 @@ import static org.apache.pulsar.broker.authentication.AuthenticationProviderToke
 
 public class ClearTextFunctionTokenAuthProvider implements FunctionAuthProvider {
     @Override
-    public void configureAuthenticationConfig(AuthenticationConfig authConfig, FunctionAuthData functionAuthData) {
-        authConfig.setClientAuthenticationPlugin(AuthenticationToken.class.getName());
-        authConfig.setClientAuthenticationParameters("token:" + new String(functionAuthData.getData()));
+    public void configureAuthenticationConfig(AuthenticationConfig authConfig, Optional<FunctionAuthData> functionAuthData) {
+        if (!functionAuthData.isPresent()) {
+            // if auth data is not present maybe user is trying to use anonymous role thus don't pass in any auth config
+            authConfig.setClientAuthenticationPlugin(null);
+            authConfig.setClientAuthenticationParameters(null);
+        } else {
+            authConfig.setClientAuthenticationPlugin(AuthenticationToken.class.getName());
+            authConfig.setClientAuthenticationParameters("token:" + new String(functionAuthData.get().getData()));
+        }
     }
 
     @Override
-    public Optional<FunctionAuthData> cacheAuthData(String tenant, String namespace, String name, AuthenticationDataSource authenticationDataSource) throws Exception {
+    public Optional<FunctionAuthData> cacheAuthData(Function.FunctionDetails funcDetails, AuthenticationDataSource authenticationDataSource) throws Exception {
         String token = null;
         try {
             token = getToken(authenticationDataSource);
@@ -45,11 +52,17 @@ public class ClearTextFunctionTokenAuthProvider implements FunctionAuthProvider 
         if (token != null) {
             return Optional.of(FunctionAuthData.builder().data(token.getBytes()).build());
         }
-        return null;
+        return Optional.empty();
     }
 
     @Override
-    public void cleanUpAuthData(String tenant, String namespace, String name, FunctionAuthData functionAuthData) throws Exception {
+    public Optional<FunctionAuthData> updateAuthData(Function.FunctionDetails funcDetails,
+                                                     Optional<FunctionAuthData> existingFunctionAuthData, AuthenticationDataSource authenticationDataSource) throws Exception {
+        return cacheAuthData(funcDetails, authenticationDataSource);
+    }
+
+    @Override
+    public void cleanUpAuthData(Function.FunctionDetails funcDetails, Optional<FunctionAuthData> functionAuthData) throws Exception {
         //no-op
     }
 }

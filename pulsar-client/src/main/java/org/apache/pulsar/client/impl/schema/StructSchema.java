@@ -18,18 +18,20 @@
  */
 package org.apache.pulsar.client.impl.schema;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
-import java.util.Map;
-import org.apache.avro.Schema.Parser;
+import org.apache.avro.Schema;
 import org.apache.avro.reflect.ReflectData;
-import org.apache.pulsar.client.api.Schema;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.client.api.schema.SchemaDefinition;
+import org.apache.pulsar.client.impl.schema.generic.GenericAvroSchema;
 import org.apache.pulsar.common.schema.SchemaInfo;
 import org.apache.pulsar.common.schema.SchemaType;
 
+import java.lang.reflect.Field;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 /**
- * This is a base schema implementation for `Struct` types.
+ * This is a base schema implementation for Avro Based `Struct` types.
  * A struct type is used for presenting records (objects) which
  * have multiple fields.
  *
@@ -38,39 +40,76 @@ import org.apache.pulsar.common.schema.SchemaType;
  * {@link org.apache.pulsar.common.schema.SchemaType#JSON},
  * and {@link org.apache.pulsar.common.schema.SchemaType#PROTOBUF}.
  */
-abstract class StructSchema<T> implements Schema<T> {
+public abstract class StructSchema<T> extends AbstractStructSchema<T> {
 
-    protected final org.apache.avro.Schema schema;
-    protected final SchemaInfo schemaInfo;
+    protected final Schema schema;
 
-    protected StructSchema(SchemaType schemaType,
-                           org.apache.avro.Schema schema,
-                           Map<String, String> properties) {
-        this.schema = schema;
-        this.schemaInfo = new SchemaInfo();
-        this.schemaInfo.setName("");
-        this.schemaInfo.setType(schemaType);
-        this.schemaInfo.setSchema(this.schema.toString().getBytes(UTF_8));
-        this.schemaInfo.setProperties(properties);
+    protected StructSchema(SchemaInfo schemaInfo) {
+        super(schemaInfo);
+        this.schema = parseAvroSchema(new String(schemaInfo.getSchema(), UTF_8));
+        this.schemaInfo = schemaInfo;
+        if (schemaInfo.getProperties().containsKey(GenericAvroSchema.OFFSET_PROP)) {
+            this.schema.addProp(GenericAvroSchema.OFFSET_PROP,
+                    schemaInfo.getProperties().get(GenericAvroSchema.OFFSET_PROP));
+        }
     }
 
-    protected org.apache.avro.Schema getAvroSchema() {
+    public Schema getAvroSchema() {
         return schema;
     }
 
-    @Override
-    public SchemaInfo getSchemaInfo() {
-        return this.schemaInfo;
-    }
 
-    protected static org.apache.avro.Schema createAvroSchema(SchemaDefinition schemaDefinition) {
+    protected static Schema createAvroSchema(SchemaDefinition schemaDefinition) {
         Class pojo = schemaDefinition.getPojo();
-        return schemaDefinition.getAlwaysAllowNull() ? ReflectData.AllowNull.get().getSchema(pojo) : ReflectData.get().getSchema(pojo);
+
+        if (StringUtils.isNotBlank(schemaDefinition.getJsonDef())) {
+            return parseAvroSchema(schemaDefinition.getJsonDef());
+        } else if (pojo != null) {
+            ThreadLocal<Boolean> validateDefaults = null;
+
+            try {
+                Field validateDefaultsField = Schema.class.getDeclaredField("VALIDATE_DEFAULTS");
+                validateDefaultsField.setAccessible(true);
+                validateDefaults = (ThreadLocal<Boolean>) validateDefaultsField.get(null);
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                throw new RuntimeException("Cannot disable validation of default values", e);
+            }
+
+            final boolean savedValidateDefaults = validateDefaults.get();
+
+            try {
+                // Disable validation of default values for compatibility
+                validateDefaults.set(false);
+                return extractAvroSchema(schemaDefinition, pojo);
+            } finally {
+                validateDefaults.set(savedValidateDefaults);
+            }
+        } else {
+            throw new RuntimeException("Schema definition must specify pojo class or schema json definition");
+        }
     }
 
-    protected static org.apache.avro.Schema parseAvroSchema(String jsonDef) {
-        Parser parser = new Parser();
-        return parser.parse(jsonDef);
+    protected static Schema extractAvroSchema(SchemaDefinition schemaDefinition, Class pojo) {
+        try {
+            return parseAvroSchema(pojo.getDeclaredField("SCHEMA$").get(null).toString());
+        } catch (NoSuchFieldException | IllegalAccessException | IllegalArgumentException ignored) {
+            return schemaDefinition.getAlwaysAllowNull() ? ReflectData.AllowNull.get().getSchema(pojo)
+                    : ReflectData.get().getSchema(pojo);
+        }
+    }
+
+    protected static Schema parseAvroSchema(String schemaJson) {
+        final Schema.Parser parser = new Schema.Parser();
+        parser.setValidateDefaults(false);
+        return parser.parse(schemaJson);
+    }
+
+    public static <T> SchemaInfo parseSchemaInfo(SchemaDefinition<T> schemaDefinition, SchemaType schemaType) {
+        return SchemaInfo.builder()
+                .schema(createAvroSchema(schemaDefinition).toString().getBytes(UTF_8))
+                .properties(schemaDefinition.getProperties())
+                .name("")
+                .type(schemaType).build();
     }
 
 }

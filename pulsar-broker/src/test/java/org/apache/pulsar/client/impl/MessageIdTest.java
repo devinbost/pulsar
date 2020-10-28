@@ -50,9 +50,9 @@ import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.TypedMessageBuilder;
 import org.apache.pulsar.client.impl.ProducerImpl.OpSendMsg;
 import org.apache.pulsar.client.impl.conf.ClientConfigurationData;
-import org.apache.pulsar.common.api.ByteBufPair;
-import org.apache.pulsar.common.api.Commands;
-import org.apache.pulsar.common.api.Commands.ChecksumType;
+import org.apache.pulsar.common.protocol.ByteBufPair;
+import org.apache.pulsar.common.protocol.Commands;
+import org.apache.pulsar.common.protocol.Commands.ChecksumType;
 import org.apache.pulsar.common.api.proto.PulsarApi.MessageMetadata;
 import org.apache.pulsar.common.api.proto.PulsarApi.MessageMetadata.Builder;
 import org.slf4j.Logger;
@@ -215,6 +215,7 @@ public class MessageIdTest extends BrokerTestBase {
             MessageId topicMessageId = consumer.receive().getMessageId();
             MessageId messageId = ((TopicMessageIdImpl)topicMessageId).getInnerMessageId();
             log.info("Message ID Received = " + messageId);
+            Assert.assertEquals(topicMessageId.toString(), messageId.toString());
             Assert.assertTrue(messageIds.remove(messageId), "Failed to receive Message");
         }
         log.info("Message IDs = " + messageIds);
@@ -257,13 +258,14 @@ public class MessageIdTest extends BrokerTestBase {
         for (int i = 0; i < numberOfMessages; i++) {
             MessageId topicMessageId = consumer.receive().getMessageId();
             MessageId messageId = ((TopicMessageIdImpl)topicMessageId).getInnerMessageId();
+            Assert.assertEquals(topicMessageId.toString(), messageId.toString());
             Assert.assertTrue(messageIds.remove(messageId), "Failed to receive Message");
         }
         log.info("Message IDs = " + messageIds);
         Assert.assertEquals(messageIds.size(), 0, "Not all messages received successfully");
         // TODO - this statement causes the broker to hang - need to look into
         // it
-        // consumer.unsubscribe();;
+        // consumer.unsubscribe();
     }
 
     /**

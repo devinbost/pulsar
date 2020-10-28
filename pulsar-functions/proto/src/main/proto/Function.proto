@@ -32,6 +32,12 @@ enum ProcessingGuarantees {
 enum SubscriptionType {
     SHARED = 0;
     FAILOVER = 1;
+    KEY_SHARED = 2;
+}
+
+enum SubscriptionPosition {
+    LATEST = 0;
+    EARLIEST = 1;
 }
 
 message Resources {
@@ -51,6 +57,12 @@ message FunctionDetails {
         PYTHON = 1;
         GO = 3;
     }
+    enum ComponentType {
+        UNKNOWN = 0;
+        FUNCTION = 1;
+        SOURCE = 2;
+        SINK = 3;
+    }
     string tenant = 1;
     string namespace = 2;
     string name = 3;
@@ -68,6 +80,14 @@ message FunctionDetails {
     string packageUrl = 14; //present only if function submitted with package-url
     RetryDetails retryDetails = 15;
     string runtimeFlags = 17;
+    ComponentType componentType = 18;
+    string customRuntimeOptions = 19;
+    /* If specified, this will refer to an archive that is
+     * already present in the server */
+    string builtin = 20;
+    bool retainOrdering = 21;
+    bool retainKeyOrdering = 22;
+    SubscriptionPosition subscriptionPosition = 23;
 }
 
 message ConsumerSpec {
@@ -78,6 +98,14 @@ message ConsumerSpec {
         int32 value = 1;
     }
     ReceiverQueueSize receiverQueueSize = 4;
+    map<string, string> schemaProperties = 5;
+    map<string, string> consumerProperties = 6;
+}
+
+message ProducerSpec {
+    int32 maxPendingMessages = 1;
+    int32 maxPendingMessagesAcrossPartitions = 2;
+    bool useThreadLocalProducers = 3;
 }
 
 message SourceSpec {
@@ -105,6 +133,8 @@ message SourceSpec {
     string builtin = 8;
     string subscriptionName = 9;
     bool cleanupSubscription = 11;
+    SubscriptionPosition subscriptionPosition = 12;
+    uint64 negativeAckRedeliveryDelayMs = 13;
 }
 
 message SinkSpec {
@@ -115,6 +145,7 @@ message SinkSpec {
 
     // configs used only when functions output to sink
     string topic = 3;
+    ProducerSpec producerSpec = 11;
 
     string serDeClassName = 4;
 
@@ -126,6 +157,12 @@ message SinkSpec {
      * Builtin schema type or custom schema class name
      */
     string schemaType = 7;
+
+    bool forwardSourceMessageProperty = 8;
+
+    map<string, string> schemaProperties = 9;
+
+    map<string, string> consumerProperties = 10;
 }
 
 message PackageLocationMetaData {

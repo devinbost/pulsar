@@ -21,6 +21,7 @@ package org.apache.pulsar.functions.auth;
 import org.apache.pulsar.broker.authentication.AuthenticationDataSource;
 import org.apache.pulsar.client.impl.auth.AuthenticationToken;
 import org.apache.pulsar.functions.instance.AuthenticationConfig;
+import org.apache.pulsar.functions.proto.Function;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -32,9 +33,9 @@ public class ClearTextFunctionTokenAuthProviderTest {
     public void testClearTextAuth() throws Exception {
 
         ClearTextFunctionTokenAuthProvider clearTextFunctionTokenAuthProvider = new ClearTextFunctionTokenAuthProvider();
+        Function.FunctionDetails funcDetails = Function.FunctionDetails.newBuilder().setTenant("test-tenant").setNamespace("test-ns").setName("test-func").build();
 
-        Optional<FunctionAuthData> functionAuthData = clearTextFunctionTokenAuthProvider.cacheAuthData("test-tenant",
-                "test-ns", "test-func", new AuthenticationDataSource() {
+        Optional<FunctionAuthData> functionAuthData = clearTextFunctionTokenAuthProvider.cacheAuthData(funcDetails, new AuthenticationDataSource() {
                     @Override
                     public boolean hasDataFromCommand() {
                         return true;
@@ -50,7 +51,7 @@ public class ClearTextFunctionTokenAuthProviderTest {
         Assert.assertEquals(functionAuthData.get().getData(), "test-token".getBytes());
 
         AuthenticationConfig authenticationConfig = AuthenticationConfig.builder().build();
-        clearTextFunctionTokenAuthProvider.configureAuthenticationConfig(authenticationConfig, functionAuthData.get());
+        clearTextFunctionTokenAuthProvider.configureAuthenticationConfig(authenticationConfig, functionAuthData);
 
         Assert.assertEquals(authenticationConfig.getClientAuthenticationPlugin(), AuthenticationToken.class.getName());
         Assert.assertEquals(authenticationConfig.getClientAuthenticationParameters(), "token:test-token");

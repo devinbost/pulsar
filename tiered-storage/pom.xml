@@ -25,7 +25,7 @@
   <parent>
     <groupId>org.apache.pulsar</groupId>
     <artifactId>pulsar</artifactId>
-    <version>2.4.0-SNAPSHOT</version>
+    <version>2.7.0-SNAPSHOT</version>
     <relativePath>..</relativePath>
   </parent>
 
@@ -33,11 +33,11 @@
   <name>Apache Pulsar :: Tiered Storage :: Parent</name>
 
   <properties>
-    <!-- pin the jclouds-shaded version to make the pulsar build friendly to intellij -->
-    <pulsar.jclouds.shaded.version>2.3.0</pulsar.jclouds.shaded.version>
+    <pulsar.jclouds.shaded.version>${project.version}</pulsar.jclouds.shaded.version>
   </properties>
 
   <modules>
     <module>jcloud</module>
+    <module>file-system</module>
   </modules>
 </project>

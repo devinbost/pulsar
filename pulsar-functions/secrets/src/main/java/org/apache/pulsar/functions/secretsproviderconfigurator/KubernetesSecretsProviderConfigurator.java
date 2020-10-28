@@ -20,9 +20,13 @@ package org.apache.pulsar.functions.secretsproviderconfigurator;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import io.kubernetes.client.apis.AppsV1Api;
-import io.kubernetes.client.apis.CoreV1Api;
-import io.kubernetes.client.models.*;
+import io.kubernetes.client.openapi.apis.AppsV1Api;
+import io.kubernetes.client.openapi.apis.CoreV1Api;
+import io.kubernetes.client.openapi.models.V1Container;
+import io.kubernetes.client.openapi.models.V1EnvVar;
+import io.kubernetes.client.openapi.models.V1EnvVarSource;
+import io.kubernetes.client.openapi.models.V1PodSpec;
+import io.kubernetes.client.openapi.models.V1SecretKeySelector;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.functions.proto.Function;
 import org.apache.pulsar.functions.secretsprovider.EnvironmentBasedSecretsProvider;
@@ -47,6 +51,8 @@ public class KubernetesSecretsProviderConfigurator implements SecretsProviderCon
                 return EnvironmentBasedSecretsProvider.class.getName();
             case PYTHON:
                 return "secretsprovider.EnvironmentBasedSecretsProvider";
+            case GO:
+                throw new UnsupportedOperationException();
             default:
                 throw new RuntimeException("Unknown function runtime " + functionDetails.getRuntime());
         }

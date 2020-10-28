@@ -21,6 +21,8 @@ package org.apache.flink.batch.connectors.pulsar;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.flink.batch.connectors.pulsar.serialization.AvroSerializationSchema;
 import org.apache.pulsar.client.api.Authentication;
+import org.apache.pulsar.client.impl.conf.ClientConfigurationData;
+import org.apache.pulsar.client.impl.conf.ProducerConfigurationData;
 
 /**
  * Pulsar Avro Output Format to write Flink DataSets into a Pulsar topic in Avro format.
@@ -34,4 +36,9 @@ public class PulsarAvroOutputFormat<T extends SpecificRecord> extends BasePulsar
         this.serializationSchema = new AvroSerializationSchema();
     }
 
+    public PulsarAvroOutputFormat(ClientConfigurationData clientConfigurationData,
+        ProducerConfigurationData producerConfigurationData) {
+        super(clientConfigurationData, producerConfigurationData);
+        this.serializationSchema = new AvroSerializationSchema();
+    }
 }

@@ -21,6 +21,9 @@ package org.apache.pulsar.common.policies.data;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Persistent topic internal statistics.
+ */
 public class PersistentTopicInternalStats {
 
     public long entriesAddedCounter;
@@ -41,13 +44,23 @@ public class PersistentTopicInternalStats {
     public List<LedgerInfo> ledgers;
     public Map<String, CursorStats> cursors;
 
+    // LedgerInfo for compacted topic if exist.
+    public LedgerInfo compactedLedger;
+
+    /**
+     * Ledger information.
+     */
     public static class LedgerInfo {
         public long ledgerId;
         public long entries;
         public long size;
         public boolean offloaded;
+        public String metadata;
     }
 
+    /**
+     * Pulsar cursor statistics.
+     */
     public static class CursorStats {
         public String markDeletePosition;
         public String readPosition;
@@ -62,8 +75,7 @@ public class PersistentTopicInternalStats {
         public String state;
         public long numberOfEntriesSinceFirstNotAckedMessage;
         public int totalNonContiguousDeletedMessagesRange;
-        
+
         public Map<String, Long> properties;
     }
-
 }

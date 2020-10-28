@@ -126,6 +126,8 @@ void export_config() {
             .def("batching_max_publish_delay_ms", &ProducerConfiguration::getBatchingMaxPublishDelayMs, return_value_policy<copy_const_reference>())
             .def("batching_max_publish_delay_ms", &ProducerConfiguration::setBatchingMaxPublishDelayMs, return_self<>())
             .def("property", &ProducerConfiguration::setProperty, return_self<>())
+            .def("batching_type", &ProducerConfiguration::setBatchingType, return_self<>())
+            .def("batching_type", &ProducerConfiguration::getBatchingType)
             ;
 
     class_<ConsumerConfiguration>("ConsumerConfiguration")
@@ -156,7 +158,7 @@ void export_config() {
             ;
 
     class_<ReaderConfiguration>("ReaderConfiguration")
-            .def("message_listener", &ReaderConfiguration_setReaderListener, return_self<>())
+            .def("reader_listener", &ReaderConfiguration_setReaderListener, return_self<>())
             .def("schema", &ReaderConfiguration::getSchema, return_value_policy<copy_const_reference>())
             .def("schema", &ReaderConfiguration::setSchema, return_self<>())
             .def("receiver_queue_size", &ReaderConfiguration::getReceiverQueueSize)

@@ -118,6 +118,10 @@ If you are submitting a built-in sink, you don't need to specify `--className` a
 You can simply specify the sink type `--sink-type`. The command to submit a built-in sink is
 in following form:
 
+#### Note
+
+> The `sink-type` parameter of the currently built-in connectors is determined by the setting of the `name` parameter specified in the pulsar-io.yaml file.
+
 ```bash
 ./bin/pulsar-admin sink create \
     --tenant <tenant> \
@@ -140,7 +144,7 @@ Here's an example to submit a Cassandra sink:
 
 ## Monitoring Connectors
 
-Since Pulsar IO connectors are running as [Pulsar Functions](functions-overiew.md), so you can use [`functions`](reference-pulsar-admin.md#source) commands
+Since Pulsar IO connectors are running as [Pulsar Functions](functions-overview.md), so you can use [`functions`](reference-pulsar-admin.md#source) commands
 available in the [`pulsar-admin`](reference-pulsar-admin.md) CLI tool.
 
 ### Retrieve Connector Metadata

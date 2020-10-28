@@ -41,6 +41,9 @@ public abstract class PulsarContainer<SelfT extends PulsarContainer<SelfT>> exte
     public static final int BROKER_HTTP_PORT = 8080;
 
     public static final String DEFAULT_IMAGE_NAME = "apachepulsar/pulsar-test-latest-version:latest";
+    public static final String PULSAR_2_5_IMAGE_NAME = "apachepulsar/pulsar:2.5.0";
+    public static final String PULSAR_2_4_IMAGE_NAME = "apachepulsar/pulsar:2.4.0";
+    public static final String PULSAR_2_3_IMAGE_NAME = "apachepulsar/pulsar:2.3.0";
     public static final String PULSAR_2_2_IMAGE_NAME = "apachepulsar/pulsar:2.2.0";
     public static final String PULSAR_2_1_IMAGE_NAME = "apachepulsar/pulsar:2.1.0";
     public static final String PULSAR_2_0_IMAGE_NAME = "apachepulsar/pulsar:2.0.0";
@@ -123,6 +126,8 @@ public abstract class PulsarContainer<SelfT extends PulsarContainer<SelfT>> exte
 
     protected void beforeStart() {}
 
+    protected void afterStart() {}
+
     @Override
     public void start() {
         if (httpPort > 0 && servicePort < 0) {
@@ -143,6 +148,7 @@ public abstract class PulsarContainer<SelfT extends PulsarContainer<SelfT>> exte
 
         beforeStart();
         super.start();
+        afterStart();
         log.info("Start pulsar service {} at container {}", serviceName, containerName);
     }
 
